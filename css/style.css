@@ -1186,3 +1186,137 @@ button {
     opacity: 1 !important;
     filter: none !important;
 }
+/* =========================
+   FINAL SOLID BUTTON FIX
+========================= */
+
+button.btn,
+button.btn-small,
+button.btn-primary,
+button.btn-secondary,
+button.btn-success,
+button.btn-info,
+button.btn-edit,
+button.btn-danger {
+    position: relative !important;
+    z-index: 20 !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    min-height: 34px !important;
+    padding: 8px 12px !important;
+
+    border: 0 !important;
+    outline: none !important;
+    border-radius: 5px !important;
+
+    color: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+
+    background-image: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+
+    appearance: none !important;
+    -webkit-appearance: none !important;
+}
+
+/* Remove any white overlay or pseudo-element */
+button.btn::before,
+button.btn::after,
+button.btn-small::before,
+button.btn-small::after,
+button.btn-primary::before,
+button.btn-primary::after,
+button.btn-secondary::before,
+button.btn-secondary::after,
+button.btn-success::before,
+button.btn-success::after,
+button.btn-info::before,
+button.btn-info::after,
+button.btn-edit::before,
+button.btn-edit::after,
+button.btn-danger::before,
+button.btn-danger::after {
+    display: none !important;
+    content: none !important;
+}
+
+/* Solid button colors */
+button.btn-primary {
+    background: #2563eb !important;
+}
+
+button.btn-secondary {
+    background: #334155 !important;
+}
+
+button.btn-success {
+    background: #16a34a !important;
+}
+
+button.btn-info {
+    background: #0891b2 !important;
+}
+
+button.btn-edit {
+    background: #d97706 !important;
+}
+
+button.btn-danger {
+    background: #dc2626 !important;
+}
+
+/* Small navigation buttons */
+button.btn-small {
+    background: #2563eb !important;
+}
+
+/* Hover colors */
+button.btn-primary:hover {
+    background: #1d4ed8 !important;
+}
+
+button.btn-secondary:hover {
+    background: #1e293b !important;
+}
+
+button.btn-success:hover {
+    background: #15803d !important;
+}
+
+button.btn-info:hover {
+    background: #0e7490 !important;
+}
+
+button.btn-edit:hover {
+    background: #b45309 !important;
+}
+
+button.btn-danger:hover {
+    background: #b91c1c !important;
+}
+
+button.btn-small:hover {
+    background: #1d4ed8 !important;
+}
+
+/* Task action buttons */
+.actions {
+    position: relative !important;
+    z-index: 30 !important;
+
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex-wrap: wrap !important;
+}
+
+.actions button {
+    position: relative !important;
+    z-index: 31 !important;
+}
