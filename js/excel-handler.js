@@ -1,7 +1,6 @@
 class ExcelHandler {
-
     static async exportTasks(tasks) {
-        if (!tasks.length) {
+        if (!tasks || tasks.length === 0) {
             throw new Error("No tasks to export");
         }
 
@@ -13,58 +12,71 @@ class ExcelHandler {
             "Progress (%)",
             "Priority",
             "Description",
-            "Subtasks",
-            "Created At"
+            "Subtasks"
         ];
 
         const rows = tasks.map(task => {
-            const subtasks = (task.subtasks || [])
-                .map(item => `${item.completed ? "[x]" : "[ ]"} ${item.title}`)
-                .join(" | ");
+            const subtasks = Array.isArray(task.subtasks)
+                ? task.subtasks.map(subtask => ({
+                    id: subtask.id || "",
+                    title: subtask.title || "",
+                    startDate: subtask.startDate || "",
+                    endDate: subtask.endDate || "",
+                    completed: Boolean(subtask.completed)
+                }))
+                : [];
 
             return [
-                task.name,
+                task.name || "",
                 task.assignee || "",
-                task.startDate,
-                task.endDate,
-                task.progress || 0,
+                task.startDate || "",
+                task.endDate || "",
+                Number(task.progress) || 0,
                 task.priority || "medium",
                 task.description || "",
-                subtasks,
-                task.createdAt || ""
+                JSON.stringify(subtasks)
             ];
         });
 
-        const csv = [
-            headers,
-            ...rows
-        ]
-        .map(row => row.map(value => this.csvEscape(value)).join(","))
-        .join("\r\n");
+        const csvLines = [
+            headers.map(value => this.escapeCSV(value)).join(","),
+            ...rows.map(row =>
+                row.map(value => this.escapeCSV(String(value))).join(",")
+            )
+        ];
 
+        const csvContent = "\uFEFF" + csvLines.join("\r\n");
         const blob = new Blob(
-            ["\ufeff" + csv],
-            { type: "text/csv;charset=utf-8" }
+            [csvContent],
+            { type: "text/csv;charset=utf-8;" }
         );
 
-        const filename = `office_tasks_${new Date().toISOString().slice(0, 10)}.csv`;
+        const filename =
+            `office-tasks-${new Date().toISOString().slice(0, 10)}.csv`;
 
+        await this.saveFile(blob, filename);
+    }
+
+    static async saveFile(blob, filename) {
         if ("showSaveFilePicker" in window) {
             try {
-                const handle = await window.showSaveFilePicker({
+                const fileHandle = await window.showSaveFilePicker({
                     suggestedName: filename,
-                    types: [{
-                        description: "Excel-compatible CSV",
-                        accept: {
-                            "text/csv": [".csv"]
+                    types: [
+                        {
+                            description: "CSV File",
+                            accept: {
+                                "text/csv": [".csv"]
+                            }
                         }
-                    }]
+                    ]
                 });
 
-                const writable = await handle.createWritable();
+                const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
-                return;
+
+                return true;
             } catch (error) {
                 if (error.name === "AbortError") {
                     throw new Error("Save cancelled");
@@ -74,10 +86,21 @@ class ExcelHandler {
             }
         }
 
-        this.download(blob, filename);
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        URL.revokeObjectURL(url);
+
+        return true;
     }
 
-    static csvEscape(value) {
+    static escapeCSV(value) {
         const text = String(value ?? "");
 
         if (
@@ -93,12 +116,19 @@ class ExcelHandler {
     }
 
     static importFile(file) {
-        const extension = file.name.toLowerCase().split(".").pop();
+        if (!file) {
+            return Promise.reject(new Error("No file selected"));
+        }
+
+        const extension = file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
 
         if (extension !== "csv") {
             return Promise.reject(
                 new Error(
-                    "This offline version imports CSV files. Open your Excel file and save it as CSV first."
+                    "Please use a CSV file. Open your Excel file and save it as CSV UTF-8."
                 )
             );
         }
@@ -108,118 +138,204 @@ class ExcelHandler {
 
             reader.onload = event => {
                 try {
-                    resolve(this.parseCSV(event.target.result));
+                    const csvText = event.target.result;
+                    const tasks = this.parseCSV(csvText);
+
+                    if (tasks.length === 0) {
+                        throw new Error("No valid tasks found in the file");
+                    }
+
+                    resolve(tasks);
                 } catch (error) {
                     reject(error);
                 }
             };
 
-            reader.onerror = () => reject(new Error("Unable to read file"));
-            reader.readAsText(file);
+            reader.onerror = () => {
+                reject(new Error("Could not read the selected file"));
+            };
+
+            reader.readAsText(file, "UTF-8");
         });
     }
 
-    static parseCSV(content) {
-        const rows = [];
-        let row = [];
-        let value = "";
-        let quoted = false;
+    static parseCSV(csvText) {
+        const rows = this.readCSVRows(csvText);
 
-        for (let i = 0; i < content.length; i++) {
-            const char = content[i];
-            const next = content[i + 1];
+        if (rows.length < 2) {
+            throw new Error("The CSV file does not contain task data");
+        }
 
-            if (char === '"' && quoted && next === '"') {
-                value += '"';
-                i++;
-            } else if (char === '"') {
-                quoted = !quoted;
-            } else if (char === "," && !quoted) {
-                row.push(value);
-                value = "";
-            } else if ((char === "\n" || char === "\r") && !quoted) {
-                if (char === "\r" && next === "\n") i++;
+        const headers = rows[0].map(header =>
+            header.trim().replace(/^\uFEFF/, "")
+        );
 
-                row.push(value);
-                if (row.some(cell => cell.trim() !== "")) {
-                    rows.push(row);
+        const taskNameIndex = this.findColumn(
+            headers,
+            "Task Name"
+        );
+
+        if (taskNameIndex === -1) {
+            throw new Error('The "Task Name" column is missing');
+        }
+
+        return rows.slice(1)
+            .filter(row => row.some(value => value.trim() !== ""))
+            .map((row, index) => {
+                const getValue = columnName => {
+                    const columnIndex = this.findColumn(
+                        headers,
+                        columnName
+                    );
+
+                    return columnIndex >= 0
+                        ? (row[columnIndex] || "").trim()
+                        : "";
+                };
+
+                const name = getValue("Task Name");
+
+                if (!name) {
+                    return null;
                 }
 
+                const subtasksText =
+                    getValue("Subtasks");
+
+                return {
+                    id: `imported_${Date.now()}_${index}_${Math.random()}`,
+                    name,
+                    assignee: getValue("Assignee"),
+                    startDate: getValue("Start Date"),
+                    endDate: getValue("End Date"),
+                    progress: this.safeProgress(
+                        getValue("Progress (%)")
+                    ),
+                    priority: this.safePriority(
+                        getValue("Priority")
+                    ),
+                    description: getValue("Description"),
+                    subtasks: this.parseSubtasks(subtasksText),
+                    createdAt: new Date().toISOString()
+                };
+            })
+            .filter(task => task !== null);
+    }
+
+    static parseSubtasks(value) {
+        if (!value || !value.trim()) {
+            return [];
+        }
+
+        /*
+         * New export format:
+         * Subtasks are stored as JSON in one CSV cell.
+         */
+        try {
+            const parsed = JSON.parse(value);
+
+            if (Array.isArray(parsed)) {
+                return parsed.map((subtask, index) => ({
+                    id: subtask.id ||
+                        `subtask_${Date.now()}_${index}_${Math.random()}`,
+                    title: subtask.title || "",
+                    startDate: subtask.startDate || "",
+                    endDate: subtask.endDate || "",
+                    completed: Boolean(subtask.completed)
+                }));
+            }
+        } catch (error) {
+            /*
+             * Old files may contain plain text instead of JSON.
+             * Preserve the old subtask names, but dates will remain empty
+             * because old exports did not contain the date information.
+             */
+            return value
+                .split(/\r?\n|;/)
+                .map((line, index) => line
+                    .replace(/^\s*\[[ xX✓☑]\]\s*/, "")
+                    .trim()
+                )
+                .filter(Boolean)
+                .map((title, index) => ({
+                    id: `old_subtask_${Date.now()}_${index}_${Math.random()}`,
+                    title,
+                    startDate: "",
+                    endDate: "",
+                    completed: false
+                }));
+        }
+
+        return [];
+    }
+
+    static findColumn(headers, columnName) {
+        return headers.findIndex(header =>
+            header.trim().toLowerCase() === columnName.toLowerCase()
+        );
+    }
+
+    static safeProgress(value) {
+        const progress = Number(value);
+
+        if (Number.isNaN(progress)) {
+            return 0;
+        }
+
+        return Math.max(0, Math.min(100, progress));
+    }
+
+    static safePriority(value) {
+        const priority = String(value || "").toLowerCase();
+
+        return ["low", "medium", "high"].includes(priority)
+            ? priority
+            : "medium";
+    }
+
+    static readCSVRows(text) {
+        const rows = [];
+        let row = [];
+        let cell = "";
+        let insideQuotes = false;
+
+        for (let index = 0; index < text.length; index++) {
+            const character = text[index];
+            const nextCharacter = text[index + 1];
+
+            if (character === '"') {
+                if (insideQuotes && nextCharacter === '"') {
+                    cell += '"';
+                    index++;
+                } else {
+                    insideQuotes = !insideQuotes;
+                }
+            } else if (character === "," && !insideQuotes) {
+                row.push(cell);
+                cell = "";
+            } else if (
+                (character === "\n" || character === "\r") &&
+                !insideQuotes
+            ) {
+                if (character === "\r" && nextCharacter === "\n") {
+                    index++;
+                }
+
+                row.push(cell);
+                rows.push(row);
+
                 row = [];
-                value = "";
+                cell = "";
             } else {
-                value += char;
+                cell += character;
             }
         }
 
-        if (value.length || row.length) {
-            row.push(value);
+        if (cell.length > 0 || row.length > 0) {
+            row.push(cell);
             rows.push(row);
         }
 
-        if (rows.length < 2) {
-            throw new Error("CSV file is empty");
-        }
-
-        const headers = rows[0].map(header => header.trim());
-
-        const index = name => headers.indexOf(name);
-
-        const tasks = rows.slice(1).map(row => {
-            const get = name => {
-                const position = index(name);
-                return position >= 0 ? (row[position] || "").trim() : "";
-            };
-
-            const subtasks = get("Subtasks")
-                .split("|")
-                .map(item => item.trim())
-                .filter(Boolean)
-                .map(item => ({
-                    id: crypto.randomUUID
-                        ? crypto.randomUUID()
-                        : `${Date.now()}_${Math.random()}`,
-                    title: item.replace(/^\[(x| )\]\s*/i, ""),
-                    completed: /^\[x\]/i.test(item)
-                }));
-
-            return {
-                id: crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : `${Date.now()}_${Math.random()}`,
-                name: get("Task Name"),
-                assignee: get("Assignee"),
-                startDate: get("Start Date"),
-                endDate: get("End Date"),
-                progress: calculateSubtaskProgress(subtasks) ||
-                    Number(get("Progress (%)")) ||
-                    0,
-                priority: ["low", "medium", "high"].includes(get("Priority"))
-                    ? get("Priority")
-                    : "medium",
-                description: get("Description"),
-                subtasks,
-                createdAt: new Date().toISOString()
-            };
-        }).filter(task => task.name);
-
-        if (!tasks.length) {
-            throw new Error("No valid tasks found");
-        }
-
-        return tasks;
-    }
-
-    static download(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-        URL.revokeObjectURL(url);
+        return rows;
     }
 }
