@@ -1005,14 +1005,15 @@ function renderGantt() {
 }
 
 function renderTaskTable() {
-    const tbody =
-        document.getElementById("tasksTableBody");
+    const tbody = document.getElementById("tasksTableBody");
 
-    if (!tbody) return;
+    if (!tbody) {
+        return;
+    }
 
     tbody.innerHTML = "";
 
-    if (!allTasks.length) {
+    if (!allTasks || allTasks.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" class="empty-table">
@@ -1025,7 +1026,9 @@ function renderTaskTable() {
 
     allTasks.forEach(task => {
         const comments = getTaskComments(task.taskId);
-        const completed = task.subtasks.filter(
+        const subtasks = task.subtasks || [];
+
+        const completedSubtasks = subtasks.filter(
             subtask => subtask.completed
         ).length;
 
@@ -1034,20 +1037,22 @@ function renderTaskTable() {
         row.innerHTML = `
             <td>
                 <strong>${escapeHtml(task.name)}</strong>
-                <small>${escapeHtml(task.description)}</small>
+                <small>${escapeHtml(task.description || "")}</small>
             </td>
 
             <td>${escapeHtml(task.assignee || "-")}</td>
+
             <td>${formatDate(task.startDate)}</td>
+
             <td>${formatDate(task.endDate)}</td>
 
             <td>
                 <div class="progress-bar">
                     <div
                         class="progress-fill"
-                        style="width:${task.progress}%"
+                        style="width: ${Number(task.progress) || 0}%"
                     >
-                        ${task.progress}%
+                        ${Number(task.progress) || 0}%
                     </div>
                 </div>
             </td>
@@ -1059,7 +1064,7 @@ function renderTaskTable() {
             </td>
 
             <td>
-                ${completed}/${task.subtasks.length}
+                ${completedSubtasks}/${subtasks.length}
             </td>
 
             <td>
@@ -1067,27 +1072,37 @@ function renderTaskTable() {
             </td>
 
             <td>
-    <div class="actions">
-        <button class="btn btn-small btn-edit edit-task-button">
-            Edit
-        </button>
+                <div class="actions">
+                    <button
+                        type="button"
+                        class="btn btn-small btn-edit edit-task-button"
+                    >
+                        Edit
+                    </button>
 
-        <button class="btn btn-small btn-danger delete-task-button">
-            Delete
-        </button>
-    </div>
-</td>
+                    <button
+                        type="button"
+                        class="btn btn-small btn-danger delete-task-button"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </td>
         `;
 
-        row.querySelector(".edit-task-button")
-    .addEventListener("click", () => {
-        editTask(task.taskId);
-    });
+        const editButton =
+            row.querySelector(".edit-task-button");
 
-row.querySelector(".delete-task-button")
-    .addEventListener("click", () => {
-        deleteTask(task.taskId);
-    });
+        editButton.addEventListener("click", () => {
+            editTask(task.taskId);
+        });
+
+        const deleteButton =
+            row.querySelector(".delete-task-button");
+
+        deleteButton.addEventListener("click", () => {
+            deleteTask(task.taskId);
+        });
 
         tbody.appendChild(row);
     });
@@ -1103,7 +1118,7 @@ async function deleteTask(taskId) {
     }
 
     const confirmed = confirm(
-        `Delete task "${task.name}" and all its subtasks?`
+        `Delete "${task.name}" and all its subtasks?`
     );
 
     if (!confirmed) {
@@ -1120,7 +1135,7 @@ async function deleteTask(taskId) {
         await loadSharedData();
 
         notify(
-            "Task and its subtasks deleted successfully",
+            "Task and subtasks deleted successfully",
             "success"
         );
 

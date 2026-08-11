@@ -1067,22 +1067,20 @@ button {
 /* Task action buttons */
 .actions {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
 }
 
 .btn-danger {
-    background: #dc2626;
-    color: #ffffff;
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: #dc2626 !important;
+    color: #ffffff !important;
     border: none;
-    border-radius: 5px;
-    padding: 7px 10px;
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600;
 }
 
 .btn-danger:hover {
-    background: #b91c1c;
+    background: #b91c1c !important;
 }
