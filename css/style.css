@@ -1084,3 +1084,105 @@ button {
 .btn-danger:hover {
     background: #b91c1c !important;
 }
+/* Final button visibility fix */
+
+.btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    border: none !important;
+    border-radius: 5px;
+    color: #ffffff !important;
+    font-weight: 600;
+    opacity: 1 !important;
+    filter: none !important;
+    box-shadow: none;
+}
+
+/* Header and general buttons */
+.btn-primary {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+}
+
+.btn-secondary {
+    background-color: #334155 !important;
+    color: #ffffff !important;
+}
+
+.btn-success {
+    background-color: #16a34a !important;
+    color: #ffffff !important;
+}
+
+.btn-info {
+    background-color: #0891b2 !important;
+    color: #ffffff !important;
+}
+
+/* Edit button */
+.btn-edit {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #d97706 !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+
+/* Delete button */
+.btn-danger {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+
+/* Small buttons */
+.btn-small {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* Hover effects */
+.btn-primary:hover {
+    background-color: #1d4ed8 !important;
+}
+
+.btn-secondary:hover {
+    background-color: #1e293b !important;
+}
+
+.btn-success:hover {
+    background-color: #15803d !important;
+}
+
+.btn-info:hover {
+    background-color: #0e7490 !important;
+}
+
+.btn-edit:hover {
+    background-color: #b45309 !important;
+}
+
+.btn-danger:hover {
+    background-color: #b91c1c !important;
+}
+
+/* Task action layout */
+.actions {
+    display: flex !important;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* Remove browser-like faded appearance */
+.tasks-table button {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    filter: none !important;
+}
