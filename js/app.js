@@ -1067,21 +1067,70 @@ function renderTaskTable() {
             </td>
 
             <td>
-                <button class="btn btn-small btn-edit edit-task-button">
-                    Edit
-                </button>
-            </td>
+    <div class="actions">
+        <button class="btn btn-small btn-edit edit-task-button">
+            Edit
+        </button>
+
+        <button class="btn btn-small btn-danger delete-task-button">
+            Delete
+        </button>
+    </div>
+</td>
         `;
 
         row.querySelector(".edit-task-button")
-            .addEventListener("click", () => {
-                editTask(task.taskId);
-            });
+    .addEventListener("click", () => {
+        editTask(task.taskId);
+    });
+
+row.querySelector(".delete-task-button")
+    .addEventListener("click", () => {
+        deleteTask(task.taskId);
+    });
 
         tbody.appendChild(row);
     });
 }
+async function deleteTask(taskId) {
+    const task = allTasks.find(item =>
+        String(item.taskId) === String(taskId)
+    );
 
+    if (!task) {
+        notify("Task not found", "error");
+        return;
+    }
+
+    const confirmed = confirm(
+        `Delete task "${task.name}" and all its subtasks?`
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await deleteTaskFromGoogle(
+            taskId,
+            currentUser.userId,
+            currentUser.pin
+        );
+
+        await loadSharedData();
+
+        notify(
+            "Task and its subtasks deleted successfully",
+            "success"
+        );
+
+    } catch (error) {
+        notify(
+            "Unable to delete task: " + error.message,
+            "error"
+        );
+    }
+}
 function toggleView() {
     const gantt = document.getElementById("ganttView");
     const table = document.getElementById("tableView");
