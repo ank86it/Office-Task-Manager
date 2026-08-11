@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office Task Manager V4</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <header class="header">
+        <div>
+            <h1>📋 Office Task Manager</h1>
+            <p class="subtitle">Version 4 - Tasks and Subtasks</p>
+        </div>
+
+        <div class="header-actions">
+            <button id="addTaskBtn" class="btn btn-primary">
+                + Add Task
+            </button>
+
+            <button id="exportBtn" class="btn btn-success">
+                Export CSV
+            </button>
+
+            <button id="importBtn" class="btn btn-info">
+                Import CSV
+            </button>
+
+            <button id="toggleViewBtn" class="btn btn-secondary">
+                Switch View
+            </button>
+
+            <input
+                type="file"
+                id="excelFile"
+                accept=".csv"
+                hidden
+            >
+        </div>
+    </header>
+
+    <div class="status-bar">
+        <span id="statusText">0 task(s) stored locally</span>
+        <span id="lastSync">Last updated: Never</span>
+    </div>
+
+    <div id="taskModal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeModal()"></div>
+
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add New Task</h2>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+
+            <form id="taskForm" class="task-form">
+
+                <div class="form-group">
+                    <label for="taskName">Task Name *</label>
+                    <input id="taskName" type="text" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskAssignee">Assignee</label>
+                        <input id="taskAssignee" type="text">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskStartDate">Start Date *</label>
+                        <input id="taskStartDate" type="date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="taskEndDate">End Date *</label>
+                        <input id="taskEndDate" type="date" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskProgress">
+                        Progress:
+                        <span id="progressValue">0</span>%
+                    </label>
+
+                    <input
+                        id="taskProgress"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value="0"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <div class="subtask-heading">
+                        <label>Subtasks</label>
+
+                        <button
+                            type="button"
+                            id="addSubtaskBtn"
+                            class="btn btn-small"
+                        >
+                            + Add Subtask
+                        </button>
+                    </div>
+
+                    <div
+                        id="subtasksContainer"
+                        class="subtasks-container"
+                    ></div>
+
+                    <div
+                        id="subtaskProgressInfo"
+                        class="subtask-progress-info"
+                    >
+                        No subtasks added
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="taskDescription">Description</label>
+                    <textarea id="taskDescription" rows="4"></textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Save Task
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        onclick="closeModal()"
+                    >
+                        Cancel
+                    </button>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <div id="importModal" class="modal hidden">
+        <div class="modal-overlay" onclick="closeImportModal()"></div>
+
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Import Tasks</h2>
+                <button class="modal-close" onclick="closeImportModal()">×</button>
+            </div>
+
+            <div class="import-content">
+                <p id="importMessage"></p>
+                <div id="importPreview" class="import-preview"></div>
+
+                <div class="import-options">
+                    <label>
+                        <input type="radio" name="importMode" value="replace" checked>
+                        Replace existing tasks
+                    </label>
+
+                    <label>
+                        <input type="radio" name="importMode" value="merge">
+                        Add to existing tasks
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <button id="confirmImportBtn" class="btn btn-primary">
+                        Import Tasks
+                    </button>
+
+                    <button class="btn btn-secondary" onclick="closeImportModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="main-content">
+
+        <section id="ganttView" class="view active">
+            <div class="gantt-controls">
+                <div class="year-selector">
+                    <button id="prevYearBtn" class="btn btn-small">
+                        ◀ Previous Year
+                    </button>
+
+                    <input
+                        id="yearInput"
+                        class="year-input"
+                        type="number"
+                        min="2020"
+                        max="2100"
+                    >
+
+                    <button id="nextYearBtn" class="btn btn-small">
+                        Next Year ▶
+                    </button>
+
+                    <button id="todayBtn" class="btn btn-small">
+                        Today
+                    </button>
+                </div>
+
+                <div class="zoom-controls">
+                    <button id="zoomInBtn" class="btn btn-small">🔍+</button>
+                    <button id="zoomOutBtn" class="btn btn-small">🔍−</button>
+                </div>
+            </div>
+
+            <div id="ganttChart" class="gantt-container"></div>
+        </section>
+
+        <section id="tableView" class="view">
+            <div class="table-wrapper">
+                <table class="tasks-table">
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Assignee</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Progress</th>
+                            <th>Priority</th>
+                            <th>Subtasks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="tasksTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+</div>
+
+<script src="js/excel-handler.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/gantt.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
