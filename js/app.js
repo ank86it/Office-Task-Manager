@@ -1,166 +1,489 @@
-let ganttChart = null;
-let currentEditId = null;
-let pendingImportTasks = [];
+let currentUser = null;
+let currentTaskId = null;
+let allTasks = [];
+let allSubtasks = [];
+let allComments = [];
+let selectedTask = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-    ganttChart = new GanttChart("ganttChart");
+document.addEventListener("DOMContentLoaded", initializeApp);
 
-    document.getElementById("yearInput").value =
-        new Date().getFullYear();
+async function initializeApp() {
+    setupEventListeners();
+    setDefaultYear();
 
-    setupEvents();
-    loadTasks();
-});
-
-function setupEvents() {
-    document.getElementById("addTaskBtn").onclick =
-        openNewTaskModal;
-
-    document.getElementById("exportBtn").onclick =
-        exportTasks;
-
-    document.getElementById("importBtn").onclick = () => {
-        document.getElementById("excelFile").click();
-    };
-
-    document.getElementById("excelFile").onchange =
-        handleImportFile;
-
-    document.getElementById("addSubtaskBtn").onclick = () => {
-        addSubtask();
-    };
-
-    document.getElementById("taskForm").onsubmit =
-        saveTask;
-
-    document.getElementById("taskProgress").oninput = event => {
-        document.getElementById("progressValue").textContent =
-            event.target.value;
-    };
-
-    document.getElementById("toggleViewBtn").onclick =
-        toggleView;
-
-    document.getElementById("prevYearBtn").onclick = () => {
-        ganttChart.previousYear();
-        loadTasks();
-    };
-
-    document.getElementById("nextYearBtn").onclick = () => {
-        ganttChart.nextYear();
-        loadTasks();
-    };
-
-    document.getElementById("todayBtn").onclick = () => {
-        ganttChart.goToToday();
-        loadTasks();
-    };
-
-    document.getElementById("zoomInBtn").onclick = () => {
-        ganttChart.zoomIn();
-    };
-
-    document.getElementById("zoomOutBtn").onclick = () => {
-        ganttChart.zoomOut();
-    };
-
-    document.getElementById("yearInput").onchange = event => {
-        ganttChart.setYear(event.target.value);
-        ganttChart.month = 0;
-        loadTasks();
-    };
-
-    document.getElementById("confirmImportBtn").onclick =
-        confirmImport;
+    try {
+        await loadUsers();
+    } catch (error) {
+        showLoginMessage(error.message, "error");
+    }
 }
 
-function loadTasks() {
-    const tasks = storage.getTasks();
+/* =========================
+   EVENT LISTENERS
+========================= */
 
-    ganttChart.render(tasks);
-    renderTable(tasks);
-    updateStatus();
+function setupEventListeners() {
+    document.getElementById("loginBtn").addEventListener("click", loginUser);
+    document.getElementById("createUserBtn").addEventListener("click", createNewUser);
+
+    document
+        .getElementById("showCreateUserBtn")
+        .addEventListener("click", showCreateUser);
+
+    document
+        .getElementById("backToLoginBtn")
+        .addEventListener("click", showLogin);
+
+    document
+        .getElementById("addTaskBtn")
+        .addEventListener("click", openNewTask);
+
+    document
+        .getElementById("taskForm")
+        .addEventListener("submit", saveTask);
+
+    document
+        .getElementById("addSubtaskBtn")
+        .addEventListener("click", () => addSubtask());
+
+    document
+        .getElementById("addCommentBtn")
+        .addEventListener("click", addCommentToTask);
+
+    document
+        .getElementById("backupBtn")
+        .addEventListener("click", exportBackup);
+
+    document
+        .getElementById("refreshBtn")
+        .addEventListener("click", loadSharedData);
+
+    document
+        .getElementById("logoutBtn")
+        .addEventListener("click", logoutUser);
+
+    document
+        .getElementById("toggleViewBtn")
+        .addEventListener("click", toggleView);
+
+    document
+        .getElementById("showGanttBtn")
+        .addEventListener("click", showGantt);
+
+    document
+        .getElementById("prevYearBtn")
+        .addEventListener("click", () => {
+            ganttChart.previousYear();
+            renderGantt();
+        });
+
+    document
+        .getElementById("nextYearBtn")
+        .addEventListener("click", () => {
+            ganttChart.nextYear();
+            renderGantt();
+        });
+
+    document
+        .getElementById("todayBtn")
+        .addEventListener("click", () => {
+            ganttChart.goToToday();
+            renderGantt();
+        });
+
+    document
+        .getElementById("zoomInBtn")
+        .addEventListener("click", () => ganttChart.zoomIn());
+
+    document
+        .getElementById("zoomOutBtn")
+        .addEventListener("click", () => ganttChart.zoomOut());
+
+    document
+        .getElementById("yearInput")
+        .addEventListener("change", event => {
+            ganttChart.setYear(Number(event.target.value));
+            renderGantt();
+        });
+
+    document
+        .getElementById("taskProgress")
+        .addEventListener("input", event => {
+            document.getElementById("progressValue").textContent =
+                event.target.value;
+        });
+
+    document
+        .querySelectorAll("[data-close-task-modal]")
+        .forEach(button => {
+            button.addEventListener("click", closeTaskModal);
+        });
 }
 
-function openNewTaskModal() {
-    currentEditId = null;
+/* =========================
+   LOGIN AND USERS
+========================= */
+
+async function loadUsers() {
+    const result = await getUsers();
+
+    const users = Array.isArray(result)
+        ? result
+        : result.users || [];
+
+    const select = document.getElementById("userSelect");
+
+    select.innerHTML = `
+        <option value="">Select your name</option>
+    `;
+
+    users.forEach(user => {
+        const option = document.createElement("option");
+
+        option.value = user.userId || user["User ID"];
+        option.textContent = user.userName || user["User Name"];
+
+        select.appendChild(option);
+    });
+}
+
+async function loginUser() {
+    const userId = document.getElementById("userSelect").value;
+    const pin = document.getElementById("loginPin").value.trim();
+
+    if (!userId) {
+        showLoginMessage("Please select your name", "error");
+        return;
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+        showLoginMessage("PIN must contain exactly 4 digits", "error");
+        return;
+    }
+
+    try {
+        showLoginMessage("Checking PIN...", "info");
+
+        const result = await login(userId, pin);
+
+        currentUser = {
+            userId: result.userId,
+            userName: result.userName,
+            pin
+        };
+
+        sessionStorage.setItem(
+            "office_task_user",
+            JSON.stringify(currentUser)
+        );
+
+        showApplication();
+        await loadSharedData();
+
+    } catch (error) {
+        showLoginMessage(error.message, "error");
+    }
+}
+
+async function createNewUser() {
+    const userName = document
+        .getElementById("newUserName")
+        .value
+        .trim();
+
+    const pin = document
+        .getElementById("newUserPin")
+        .value
+        .trim();
+
+    const confirmPin = document
+        .getElementById("confirmUserPin")
+        .value
+        .trim();
+
+    if (!userName) {
+        showLoginMessage("Enter your name", "error");
+        return;
+    }
+
+    if (!/^\d{4}$/.test(pin)) {
+        showLoginMessage("PIN must contain exactly 4 digits", "error");
+        return;
+    }
+
+    if (pin !== confirmPin) {
+        showLoginMessage("PIN values do not match", "error");
+        return;
+    }
+
+    try {
+        const result = await createUser(userName, pin);
+
+        currentUser = {
+            userId: result.userId,
+            userName: result.userName,
+            pin
+        };
+
+        sessionStorage.setItem(
+            "office_task_user",
+            JSON.stringify(currentUser)
+        );
+
+        showApplication();
+        await loadSharedData();
+
+    } catch (error) {
+        showLoginMessage(error.message, "error");
+    }
+}
+
+function showCreateUser() {
+    document
+        .getElementById("existingUserSection")
+        .classList.add("hidden");
+
+    document
+        .getElementById("createUserSection")
+        .classList.remove("hidden");
+
+    clearLoginMessage();
+}
+
+function showLogin() {
+    document
+        .getElementById("createUserSection")
+        .classList.add("hidden");
+
+    document
+        .getElementById("existingUserSection")
+        .classList.remove("hidden");
+
+    clearLoginMessage();
+}
+
+function showApplication() {
+    document
+        .getElementById("loginScreen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("appScreen")
+        .classList.remove("hidden");
+
+    document
+        .getElementById("currentUserDisplay")
+        .textContent = `👤 ${currentUser.userName}`;
+}
+
+function logoutUser() {
+    currentUser = null;
+    sessionStorage.removeItem("office_task_user");
+
+    document
+        .getElementById("appScreen")
+        .classList.add("hidden");
+
+    document
+        .getElementById("loginScreen")
+        .classList.remove("hidden");
+
+    document.getElementById("loginPin").value = "";
+
+    showLogin();
+}
+
+function showLoginMessage(message, type) {
+    const element = document.getElementById("loginMessage");
+
+    element.textContent = message;
+    element.className = `login-message ${type}`;
+}
+
+function clearLoginMessage() {
+    const element = document.getElementById("loginMessage");
+
+    element.textContent = "";
+    element.className = "login-message";
+}
+
+/* =========================
+   SHARED DATA
+========================= */
+
+async function loadSharedData() {
+    if (!currentUser) return;
+
+    try {
+        updateStatus("Loading shared data...");
+
+        const result = await getAllData(
+            currentUser.userId,
+            currentUser.pin
+        );
+
+        allTasks = result.tasks || [];
+        allSubtasks = result.subtasks || [];
+        allComments = result.comments || [];
+
+        normalizeSharedData();
+
+        renderGantt();
+        renderTaskTable();
+
+        updateStatus(
+            `${allTasks.length} task(s) loaded from Google Sheets`
+        );
+
+    } catch (error) {
+        notify(error.message, "error");
+        updateStatus("Unable to load shared data");
+    }
+}
+
+function normalizeSharedData() {
+    allTasks = allTasks.map(task => {
+        const taskId = task["Task ID"] || task.taskId;
+
+        return {
+            id: taskId,
+            taskId,
+            name: task["Task Name"] || task.name || "",
+            assignee: task.Assignee || task.assignee || "",
+            startDate: task["Start Date"] || task.startDate || "",
+            endDate: task["End Date"] || task.endDate || "",
+            progress: Number(task.Progress || task.progress || 0),
+            priority: task.Priority || task.priority || "medium",
+            description: task.Description || task.description || "",
+            createdBy: task["Created By"] || "",
+            createdAt: task["Created At"] || "",
+            updatedBy: task["Updated By"] || "",
+            updatedAt: task["Updated At"] || "",
+            subtasks: allSubtasks
+                .filter(subtask =>
+                    String(subtask["Task ID"] || subtask.taskId) ===
+                    String(taskId)
+                )
+                .map(subtask => ({
+                    id: subtask["Subtask ID"] || subtask.subtaskId,
+                    title: subtask["Subtask Name"] || subtask.title || "",
+                    startDate: subtask["Start Date"] || "",
+                    endDate: subtask["End Date"] || "",
+                    completed: String(
+                        subtask.Completed
+                    ).toLowerCase() === "true"
+                }))
+        };
+    });
+}
+
+/* =========================
+   TASK FORM
+========================= */
+
+function openNewTask() {
+    currentTaskId = null;
+    selectedTask = null;
 
     document.getElementById("modalTitle").textContent =
         "Add New Task";
 
     document.getElementById("taskForm").reset();
+    document.getElementById("editingTaskId").value = "";
+
+    document.getElementById("progressValue").textContent = "0";
+    document.getElementById("subtasksContainer").innerHTML = "";
+    document.getElementById("subtaskProgressInfo").textContent =
+        "No subtasks added";
+
+    document.getElementById("commentsContainer").innerHTML = `
+        <p class="no-comments">
+            Save the task first to add comments.
+        </p>
+    `;
+
+    document.getElementById("commentsCount").textContent = "0";
+    document.getElementById("newCommentSection").classList.add("hidden");
 
     const today = new Date();
-    const end = new Date();
-    end.setDate(today.getDate() + 30);
+    const endDate = new Date();
+    endDate.setDate(today.getDate() + 30);
 
     document.getElementById("taskStartDate").value =
         toDateInput(today);
 
     document.getElementById("taskEndDate").value =
-        toDateInput(end);
+        toDateInput(endDate);
 
-    document.getElementById("taskProgress").value = 0;
-    document.getElementById("progressValue").textContent = 0;
-
-    renderSubtasks([]);
-
-    document.getElementById("taskModal").classList.remove("hidden");
+    openTaskModal();
 }
 
-function editTask(id) {
-    const task = storage.getTaskById(id);
+function editTask(taskId) {
+    const task = allTasks.find(item =>
+        String(item.taskId) === String(taskId)
+    );
 
     if (!task) {
         notify("Task not found", "error");
         return;
     }
 
-    currentEditId = id;
+    currentTaskId = task.taskId;
+    selectedTask = task;
 
     document.getElementById("modalTitle").textContent =
         "Edit Task";
 
+    document.getElementById("editingTaskId").value =
+        task.taskId;
+
     document.getElementById("taskName").value =
-        task.name || "";
+        task.name;
 
     document.getElementById("taskAssignee").value =
-        task.assignee || "";
+        task.assignee;
 
     document.getElementById("taskPriority").value =
-        task.priority || "medium";
+        task.priority;
 
     document.getElementById("taskStartDate").value =
-        task.startDate || "";
+        task.startDate;
 
     document.getElementById("taskEndDate").value =
-        task.endDate || "";
+        task.endDate;
 
     document.getElementById("taskProgress").value =
-        task.progress || 0;
+        task.progress;
 
     document.getElementById("progressValue").textContent =
-        task.progress || 0;
+        task.progress;
 
     document.getElementById("taskDescription").value =
-        task.description || "";
+        task.description;
 
     renderSubtasks(task.subtasks || []);
+    renderComments(task.taskId);
 
-    document.getElementById("taskModal").classList.remove("hidden");
+    document
+        .getElementById("newCommentSection")
+        .classList.remove("hidden");
+
+    openTaskModal();
 }
 
-function closeModal() {
-    document.getElementById("taskModal").classList.add("hidden");
-    currentEditId = null;
-}
-
-function saveTask(event) {
+async function saveTask(event) {
     event.preventDefault();
 
-    const name = document.getElementById("taskName").value.trim();
-    const startDate = document.getElementById("taskStartDate").value;
-    const endDate = document.getElementById("taskEndDate").value;
+    const name = document
+        .getElementById("taskName")
+        .value
+        .trim();
+
+    const startDate =
+        document.getElementById("taskStartDate").value;
+
+    const endDate =
+        document.getElementById("taskEndDate").value;
 
     if (!name) {
         notify("Task name is required", "error");
@@ -177,97 +500,97 @@ function saveTask(event) {
         return;
     }
 
-    const subtasks = getSubtasksFromForm();
+    const subtasks = readSubtasks();
 
     const progress = subtasks.length
-        ? calculateSubtaskProgress(subtasks)
-        : Number(document.getElementById("taskProgress").value) || 0;
+        ? calculateProgress(subtasks)
+        : Number(
+            document.getElementById("taskProgress").value
+        ) || 0;
 
-    const taskData = {
+    const task = {
+        taskId: currentTaskId || "",
         name,
-        assignee: document.getElementById("taskAssignee").value.trim(),
-        priority: document.getElementById("taskPriority").value,
+        assignee: document
+            .getElementById("taskAssignee")
+            .value
+            .trim(),
+        priority: document
+            .getElementById("taskPriority")
+            .value,
         startDate,
         endDate,
         progress,
-        description: document.getElementById("taskDescription").value.trim(),
+        description: document
+            .getElementById("taskDescription")
+            .value
+            .trim(),
         subtasks
     };
 
-    if (currentEditId) {
-        storage.updateTask(currentEditId, taskData);
-        notify("Task updated successfully", "success");
-    } else {
-        storage.addTask(taskData);
-        notify("Task created successfully", "success");
+    try {
+        await saveTaskToGoogle(
+            task,
+            currentUser.userId,
+            currentUser.pin
+        );
+
+        closeTaskModal();
+        await loadSharedData();
+
+        notify("Task saved successfully", "success");
+
+    } catch (error) {
+        notify(error.message, "error");
     }
-
-    closeModal();
-    loadTasks();
-}
-
-function addSubtask(data = {}) {
-    const container = document.getElementById("subtasksContainer");
-    const row = createSubtaskRow(data);
-
-    container.appendChild(row);
-
-    const title = row.querySelector(".subtask-title");
-    if (title) {
-        title.focus();
-    }
-
-    updateSubtaskProgress();
 }
 
 function renderSubtasks(subtasks) {
-    const container = document.getElementById("subtasksContainer");
+    const container =
+        document.getElementById("subtasksContainer");
+
     container.innerHTML = "";
 
     subtasks.forEach(subtask => {
-        container.appendChild(createSubtaskRow(subtask));
+        addSubtask(subtask);
     });
 
     updateSubtaskProgress();
 }
 
-function createSubtaskRow(data = {}) {
+function addSubtask(subtask = {}) {
+    const container =
+        document.getElementById("subtasksContainer");
+
     const row = document.createElement("div");
     row.className = "subtask-row";
-
-    const id = data.id ||
-        (
-            crypto.randomUUID
-                ? crypto.randomUUID()
-                : `subtask_${Date.now()}_${Math.random()}`
-        );
-
-    row.dataset.id = id;
+    row.dataset.id =
+        subtask.id || `subtask_${Date.now()}_${Math.random()}`;
 
     row.innerHTML = `
         <input
             type="checkbox"
             class="subtask-checkbox"
-            ${data.completed ? "checked" : ""}
+            ${subtask.completed ? "checked" : ""}
         >
 
         <input
             type="text"
             class="subtask-title"
             placeholder="Subtask name"
-            value="${escapeHtml(data.title || "")}"
+            value="${escapeHtml(subtask.title || "")}"
         >
 
         <input
             type="date"
             class="subtask-start-date"
-            value="${data.startDate || ""}"
+            value="${subtask.startDate || ""}"
         >
 
         <input
             type="date"
             class="subtask-end-date"
-            value="${data.endDate || ""}"
+            value="${subtask.endDate || ""}"
         >
 
         <button
@@ -278,114 +601,344 @@ function createSubtaskRow(data = {}) {
         </button>
     `;
 
-    const checkbox = row.querySelector(".subtask-checkbox");
-    const title = row.querySelector(".subtask-title");
-    const start = row.querySelector(".subtask-start-date");
-    const end = row.querySelector(".subtask-end-date");
-    const remove = row.querySelector(".remove-subtask");
+    row
+        .querySelector(".subtask-checkbox")
+        .addEventListener("change", () => {
+            row.classList.toggle(
+                "completed",
+                row.querySelector(".subtask-checkbox").checked
+            );
 
-    checkbox.onchange = () => {
-        row.classList.toggle("completed", checkbox.checked);
-        updateSubtaskProgress();
-    };
+            updateSubtaskProgress();
+        });
 
-    title.oninput = updateSubtaskProgress;
-    start.onchange = updateSubtaskProgress;
-    end.onchange = updateSubtaskProgress;
+    row
+        .querySelector(".remove-subtask")
+        .addEventListener("click", () => {
+            row.remove();
+            updateSubtaskProgress();
+        });
 
-    remove.onclick = () => {
-        row.remove();
-        updateSubtaskProgress();
-    };
-
-    if (data.completed) {
-        row.classList.add("completed");
-    }
-
-    return row;
+    container.appendChild(row);
 }
 
-function getSubtasksFromForm() {
-    const rows = document.querySelectorAll(".subtask-row");
-    const subtasks = [];
-
-    rows.forEach(row => {
-        const title = row.querySelector(".subtask-title").value.trim();
-
-        if (!title) {
-            return;
-        }
-
-        subtasks.push({
+function readSubtasks() {
+    return [...document.querySelectorAll(".subtask-row")]
+        .map(row => ({
             id: row.dataset.id,
-            title,
+            title: row.querySelector(".subtask-title").value.trim(),
             startDate: row.querySelector(".subtask-start-date").value,
             endDate: row.querySelector(".subtask-end-date").value,
             completed: row.querySelector(".subtask-checkbox").checked
-        });
-    });
+        }))
+        .filter(subtask => subtask.title);
+}
 
-    return subtasks;
+function calculateProgress(subtasks) {
+    if (!subtasks.length) return 0;
+
+    const completed = subtasks.filter(
+        subtask => subtask.completed
+    ).length;
+
+    return Math.round(
+        completed / subtasks.length * 100
+    );
 }
 
 function updateSubtaskProgress() {
-    const rows = Array.from(
-        document.querySelectorAll(".subtask-row")
+    const subtasks = readSubtasks();
+    const progress = calculateProgress(subtasks);
+
+    document.getElementById("progressValue").textContent =
+        subtasks.length ? progress : 0;
+
+    document.getElementById("taskProgress").value =
+        subtasks.length ? progress : 0;
+
+    document.getElementById("subtaskProgressInfo").textContent =
+        subtasks.length
+            ? `${subtasks.filter(item => item.completed).length} of ${subtasks.length} completed`
+            : "No subtasks added";
+}
+
+/* =========================
+   COMMENTS
+========================= */
+
+function getTaskComments(taskId) {
+    return allComments.filter(comment =>
+        String(comment["Task ID"] || comment.taskId) ===
+        String(taskId) &&
+        String(comment.Deleted).toLowerCase() !== "true"
     );
+}
 
-    const info = document.getElementById("subtaskProgressInfo");
+function renderComments(taskId) {
+    const comments = getTaskComments(taskId);
+    const container = document.getElementById("commentsContainer");
 
-    if (!rows.length) {
-        info.textContent = "No subtasks added";
+    document.getElementById("commentsCount").textContent =
+        comments.length;
+
+    if (!comments.length) {
+        container.innerHTML = `
+            <p class="no-comments">
+                No comments yet.
+            </p>
+        `;
         return;
     }
 
-    const completed = rows.filter(row => {
-        return row.querySelector(".subtask-checkbox").checked;
-    }).length;
-
-    const progress = Math.round(
-        completed / rows.length * 100
+    const parentComments = comments.filter(comment =>
+        !(comment["Parent Comment ID"] || comment.parentCommentId)
     );
 
-    info.textContent =
-        `${completed} of ${rows.length} completed — Progress: ${progress}%`;
+    container.innerHTML = "";
 
-    document.getElementById("progressValue").textContent = progress;
-    document.getElementById("taskProgress").value = progress;
+    parentComments.forEach(comment => {
+        container.appendChild(
+            createCommentElement(comment, comments)
+        );
+    });
 }
 
-function calculateSubtaskProgress(subtasks) {
-    if (!subtasks.length) {
-        return 0;
+function createCommentElement(comment, allTaskComments) {
+    const commentId =
+        comment["Comment ID"] || comment.commentId;
+
+    const userId =
+        comment["User ID"] || comment.userId;
+
+    const text =
+        comment["Comment Text"] || comment.commentText || "";
+
+    const userName =
+        comment["User Name"] || comment.userName || "";
+
+    const createdAt =
+        comment["Created At"] || comment.createdAt || "";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "comment-item";
+
+    wrapper.innerHTML = `
+        <div class="comment-header">
+            <strong>${escapeHtml(userName)}</strong>
+            <small>${escapeHtml(createdAt)}</small>
+        </div>
+
+        <div class="comment-text">
+            ${escapeHtml(text)}
+        </div>
+
+        <div class="comment-actions">
+            <button class="comment-reply-btn">Reply</button>
+            ${
+                userId === currentUser.userId
+                    ? `
+                        <button class="comment-edit-btn">Edit</button>
+                        <button class="comment-delete-btn">Delete</button>
+                      `
+                    : ""
+            }
+        </div>
+
+        <div class="reply-form hidden">
+            <textarea
+                class="reply-text"
+                rows="2"
+                placeholder="Write a reply..."
+            ></textarea>
+
+            <button class="btn btn-small submit-reply-btn">
+                Add Reply
+            </button>
+        </div>
+
+        <div class="replies-container"></div>
+    `;
+
+    wrapper
+        .querySelector(".comment-reply-btn")
+        .addEventListener("click", () => {
+            wrapper
+                .querySelector(".reply-form")
+                .classList.toggle("hidden");
+        });
+
+    wrapper
+        .querySelector(".submit-reply-btn")
+        .addEventListener("click", async () => {
+            const replyText = wrapper
+                .querySelector(".reply-text")
+                .value
+                .trim();
+
+            if (!replyText) return;
+
+            await submitComment({
+                taskId: currentTaskId,
+                commentText: replyText,
+                parentCommentId: commentId
+            });
+        });
+
+    const editButton =
+        wrapper.querySelector(".comment-edit-btn");
+
+    if (editButton) {
+        editButton.addEventListener("click", async () => {
+            const newText = prompt(
+                "Edit comment:",
+                text
+            );
+
+            if (!newText || newText.trim() === text) {
+                return;
+            }
+
+            try {
+                await updateComment(
+                    commentId,
+                    newText.trim(),
+                    currentUser.userId,
+                    currentUser.pin
+                );
+
+                await loadSharedData();
+                renderComments(currentTaskId);
+
+            } catch (error) {
+                notify(error.message, "error");
+            }
+        });
     }
 
-    const completed = subtasks.filter(
-        item => item.completed
-    ).length;
+    const deleteButton =
+        wrapper.querySelector(".comment-delete-btn");
 
-    return Math.round(completed / subtasks.length * 100);
+    if (deleteButton) {
+        deleteButton.addEventListener("click", async () => {
+            if (!confirm("Delete this comment?")) {
+                return;
+            }
+
+            try {
+                await deleteComment(
+                    commentId,
+                    currentUser.userId,
+                    currentUser.pin
+                );
+
+                await loadSharedData();
+                renderComments(currentTaskId);
+
+            } catch (error) {
+                notify(error.message, "error");
+            }
+        });
+    }
+
+    const replies = allTaskComments.filter(reply =>
+        String(
+            reply["Parent Comment ID"] ||
+            reply.parentCommentId
+        ) === String(commentId)
+    );
+
+    const repliesContainer =
+        wrapper.querySelector(".replies-container");
+
+    replies.forEach(reply => {
+        repliesContainer.appendChild(
+            createCommentElement(reply, allTaskComments)
+        );
+    });
+
+    return wrapper;
 }
 
-function renderTable(tasks) {
-    const tbody = document.getElementById("tasksTableBody");
+async function addCommentToTask() {
+    const text = document
+        .getElementById("newComment")
+        .value
+        .trim();
+
+    if (!currentTaskId) {
+        notify("Save the task before adding comments", "error");
+        return;
+    }
+
+    if (!text) {
+        notify("Enter a comment", "error");
+        return;
+    }
+
+    await submitComment({
+        taskId: currentTaskId,
+        commentText: text,
+        parentCommentId: ""
+    });
+}
+
+async function submitComment(comment) {
+    try {
+        await addComment(
+            comment,
+            currentUser.userId,
+            currentUser.pin
+        );
+
+        document.getElementById("newComment").value = "";
+
+        await loadSharedData();
+        renderComments(currentTaskId);
+
+        notify("Comment saved", "success");
+
+    } catch (error) {
+        notify(error.message, "error");
+    }
+}
+
+/* =========================
+   TABLE AND GANTT
+========================= */
+
+function renderGantt() {
+    if (!window.ganttChart) {
+        if (typeof GanttChart !== "undefined") {
+            window.ganttChart = new GanttChart("ganttChart");
+        } else {
+            return;
+        }
+    }
+
+    ganttChart.render(allTasks);
+}
+
+function renderTaskTable() {
+    const tbody =
+        document.getElementById("tasksTableBody");
+
     tbody.innerHTML = "";
 
-    if (!tasks.length) {
+    if (!allTasks.length) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="empty-table">
-                    No tasks available.
+                <td colspan="9" class="empty-table">
+                    No tasks found.
                 </td>
             </tr>
         `;
         return;
     }
 
-    tasks.forEach(task => {
-        const subtasks = task.subtasks || [];
-        const completed = subtasks.filter(
-            item => item.completed
+    allTasks.forEach(task => {
+        const comments = getTaskComments(task.taskId);
+        const completed = task.subtasks.filter(
+            subtask => subtask.completed
         ).length;
 
         const row = document.createElement("tr");
@@ -393,7 +946,7 @@ function renderTable(tasks) {
         row.innerHTML = `
             <td>
                 <strong>${escapeHtml(task.name)}</strong>
-                <small>${escapeHtml(task.description || "")}</small>
+                <small>${escapeHtml(task.description)}</small>
             </td>
 
             <td>${escapeHtml(task.assignee || "-")}</td>
@@ -404,9 +957,9 @@ function renderTable(tasks) {
                 <div class="progress-bar">
                     <div
                         class="progress-fill"
-                        style="width:${Number(task.progress) || 0}%"
+                        style="width:${task.progress}%"
                     >
-                        ${Number(task.progress) || 0}%
+                        ${task.progress}%
                     </div>
                 </div>
             </td>
@@ -417,196 +970,208 @@ function renderTable(tasks) {
                 </span>
             </td>
 
-            <td>${completed}/${subtasks.length}</td>
+            <td>
+                ${completed}/${task.subtasks.length}
+            </td>
 
             <td>
-                <div class="actions">
-                    <button
-                        class="btn btn-edit"
-                        onclick="editTask('${task.id}')"
-                    >
-                        Edit
-                    </button>
+                ${comments.length}
+            </td>
 
-                    <button
-                        class="btn btn-danger"
-                        onclick="deleteTask('${task.id}')"
-                    >
-                        Delete
-                    </button>
-                </div>
+            <td>
+                <button class="btn btn-edit edit-task-btn">
+                    Edit
+                </button>
             </td>
         `;
 
+        row
+            .querySelector(".edit-task-btn")
+            .addEventListener("click", () => {
+                editTask(task.taskId);
+            });
+
         tbody.appendChild(row);
     });
-}
-
-function deleteTask(id) {
-    const task = storage.getTaskById(id);
-
-    if (!task) {
-        return;
-    }
-
-    if (confirm(`Delete "${task.name}"?`)) {
-        storage.deleteTask(id);
-        loadTasks();
-        notify("Task deleted", "success");
-    }
 }
 
 function toggleView() {
     const gantt = document.getElementById("ganttView");
     const table = document.getElementById("tableView");
 
-    const isGanttVisible = gantt.classList.contains("active");
+    const showingGantt = gantt.classList.contains("active");
 
-    gantt.classList.toggle("active", !isGanttVisible);
-    table.classList.toggle("active", isGanttVisible);
+    gantt.classList.toggle("active", !showingGantt);
+    table.classList.toggle("active", showingGantt);
 
     document.getElementById("toggleViewBtn").textContent =
-        isGanttVisible ? "Show Gantt" : "Show Table";
+        showingGantt ? "Show Gantt" : "Show Table";
 }
 
-async function exportTasks() {
+function showGantt() {
+    document.getElementById("tableView").classList.remove("active");
+    document.getElementById("ganttView").classList.add("active");
+}
+
+/* =========================
+   BACKUP EXPORT
+========================= */
+
+async function exportBackup() {
     try {
-        const tasks = storage.getTasks();
+        const data = await exportGoogleBackup(
+            currentUser.userId,
+            currentUser.pin
+        );
 
-        if (!tasks.length) {
-            notify("No tasks to export", "error");
-            return;
-        }
+        const csv = createBackupCSV(data);
+        downloadTextFile(
+            csv,
+            `office-task-manager-backup-${Date.now()}.csv`
+        );
 
-        if (typeof ExcelHandler === "undefined") {
-            notify("Excel handler file is missing", "error");
-            return;
-        }
+        notify("Backup exported successfully", "success");
 
-        await ExcelHandler.exportTasks(tasks);
-        notify("Tasks exported successfully", "success");
     } catch (error) {
         notify(error.message, "error");
     }
 }
 
-function handleImportFile(event) {
-    const file = event.target.files[0];
+function createBackupCSV(data) {
+    const sections = [];
 
-    if (!file) {
-        return;
-    }
+    sections.push("[USERS]");
+    sections.push(objectsToCSV(data.users || []));
 
-    if (typeof ExcelHandler === "undefined") {
-        notify("Excel handler file is missing", "error");
-        return;
-    }
+    sections.push("[TASKS]");
+    sections.push(objectsToCSV(data.tasks || []));
 
-    ExcelHandler.importFile(file)
-        .then(tasks => {
-            pendingImportTasks = tasks;
-            showImportPreview(tasks);
-        })
-        .catch(error => {
-            notify(error.message, "error");
-        });
+    sections.push("[SUBTASKS]");
+    sections.push(objectsToCSV(data.subtasks || []));
 
-    event.target.value = "";
+    sections.push("[COMMENTS]");
+    sections.push(objectsToCSV(data.comments || []));
+
+    sections.push("[AUDITLOG]");
+    sections.push(objectsToCSV(data.auditLog || []));
+
+    return "\uFEFF" + sections.join("\r\n\r\n");
 }
 
-function showImportPreview(tasks) {
-    document.getElementById("importMessage").textContent =
-        `${tasks.length} task(s) found`;
+function objectsToCSV(objects) {
+    if (!objects.length) {
+        return "";
+    }
 
-    const preview = document.getElementById("importPreview");
+    const headers = Object.keys(objects[0]);
 
-    preview.innerHTML = `
-        <table class="import-preview-table">
-            <thead>
-                <tr>
-                    <th>Task</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Progress</th>
-                </tr>
-            </thead>
+    const lines = [
+        headers.map(escapeCSV).join(",")
+    ];
 
-            <tbody>
-                ${tasks.slice(0, 10).map(task => `
-                    <tr>
-                        <td>${escapeHtml(task.name)}</td>
-                        <td>${task.startDate}</td>
-                        <td>${task.endDate}</td>
-                        <td>${task.progress}%</td>
-                    </tr>
-                `).join("")}
-            </tbody>
-        </table>
-    `;
+    objects.forEach(object => {
+        lines.push(
+            headers
+                .map(header =>
+                    escapeCSV(object[header] || "")
+                )
+                .join(",")
+        );
+    });
 
-    document.getElementById("importModal")
+    return lines.join("\r\n");
+}
+
+function escapeCSV(value) {
+    const text = String(value || "");
+
+    return /[",\r\n]/.test(text)
+        ? `"${text.replace(/"/g, '""')}"`
+        : text;
+}
+
+function downloadTextFile(text, filename) {
+    const blob = new Blob(
+        [text],
+        { type: "text/csv;charset=utf-8" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    link.click();
+
+    URL.revokeObjectURL(url);
+}
+
+/* =========================
+   MODAL AND HELPERS
+========================= */
+
+function openTaskModal() {
+    document
+        .getElementById("taskModal")
         .classList.remove("hidden");
 }
 
-function confirmImport() {
-    if (!pendingImportTasks.length) {
-        notify("No tasks to import", "error");
-        return;
-    }
-
-    const mode = document.querySelector(
-        'input[name="importMode"]:checked'
-    ).value;
-
-    storage.mergeImportedTasks(
-        pendingImportTasks,
-        mode
-    );
-
-    closeImportModal();
-    loadTasks();
-
-    notify("Tasks imported successfully", "success");
-    pendingImportTasks = [];
-}
-
-function closeImportModal() {
-    document.getElementById("importModal")
+function closeTaskModal() {
+    document
+        .getElementById("taskModal")
         .classList.add("hidden");
-
-    document.getElementById("importPreview")
-        .innerHTML = "";
-
-    pendingImportTasks = [];
 }
 
-function updateStatus() {
-    const tasks = storage.getTasks();
+function setDefaultYear() {
+    const input = document.getElementById("yearInput");
 
+    if (input) {
+        input.value = new Date().getFullYear();
+    }
+}
+
+function updateStatus(message) {
     document.getElementById("statusText").textContent =
-        `${tasks.length} task(s) stored locally`;
+        message;
 
     document.getElementById("lastSync").textContent =
-        `Last updated: ${storage.getLastSync()}`;
+        `Last sync: ${new Date().toLocaleTimeString()}`;
 }
 
 function notify(message, type = "info") {
-    const item = document.createElement("div");
+    const container =
+        document.getElementById("notificationContainer");
 
-    item.className =
+    const notification = document.createElement("div");
+
+    notification.className =
         `notification notification-${type}`;
 
-    item.textContent = message;
+    notification.textContent = message;
 
-    document.body.appendChild(item);
-
-    setTimeout(() => item.classList.add("show"), 10);
+    container.appendChild(notification);
 
     setTimeout(() => {
-        item.classList.remove("show");
+        notification.classList.add("show");
+    }, 10);
 
-        setTimeout(() => item.remove(), 300);
+    setTimeout(() => {
+        notification.classList.remove("show");
+
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
     }, 3000);
+}
+
+function formatDate(value) {
+    if (!value) return "-";
+
+    const parts = value.split("-");
+
+    return parts.length === 3
+        ? `${parts[2]}/${parts[1]}/${parts[0]}`
+        : value;
 }
 
 function toDateInput(date) {
@@ -617,22 +1182,8 @@ function toDateInput(date) {
     return `${year}-${month}-${day}`;
 }
 
-function formatDate(value) {
-    if (!value) {
-        return "No date";
-    }
-
-    const parts = value.split("-");
-
-    return parts.length === 3
-        ? `${parts[2]}/${parts[1]}/${parts[0]}`
-        : value;
-}
-
 function capitalize(value) {
-    if (!value) {
-        return "";
-    }
+    if (!value) return "";
 
     return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -3,259 +3,624 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Office Task Manager V4</title>
+
+    <title>Office Task Manager V5</title>
+
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
 
-<div class="container">
+    <!-- Login screen -->
+    <section id="loginScreen" class="login-screen">
 
-    <header class="header">
-        <div>
-            <h1>📋 Office Task Manager</h1>
-            <p class="subtitle">Version 4 - Tasks and Subtasks</p>
-        </div>
+        <div class="login-card">
 
-        <div class="header-actions">
-            <button id="addTaskBtn" class="btn btn-primary">
-                + Add Task
-            </button>
+            <div class="login-logo">📋</div>
 
-            <button id="exportBtn" class="btn btn-success">
-                Export CSV
-            </button>
+            <h1>Office Task Manager</h1>
+            <p class="login-subtitle">
+                Select your name to continue
+            </p>
 
-            <button id="importBtn" class="btn btn-info">
-                Import CSV
-            </button>
+            <div id="loginMessage" class="login-message"></div>
 
-            <button id="toggleViewBtn" class="btn btn-secondary">
-                Switch View
-            </button>
+            <div id="existingUserSection">
 
-            <input
-                type="file"
-                id="excelFile"
-                accept=".csv"
-                hidden
-            >
-        </div>
-    </header>
+                <label for="userSelect">
+                    Select User
+                </label>
 
-    <div class="status-bar">
-        <span id="statusText">0 task(s) stored locally</span>
-        <span id="lastSync">Last updated: Never</span>
-    </div>
+                <select id="userSelect">
+                    <option value="">
+                        Loading users...
+                    </option>
+                </select>
 
-    <div id="taskModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeModal()"></div>
+                <label for="loginPin">
+                    4-Digit PIN
+                </label>
 
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modalTitle">Add New Task</h2>
-                <button class="modal-close" onclick="closeModal()">×</button>
+                <input
+                    type="password"
+                    id="loginPin"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    placeholder="Enter 4-digit PIN"
+                >
+
+                <button
+                    type="button"
+                    id="loginBtn"
+                    class="btn btn-primary btn-full"
+                >
+                    Continue
+                </button>
+
+                <button
+                    type="button"
+                    id="showCreateUserBtn"
+                    class="link-button"
+                >
+                    Create New User
+                </button>
+
             </div>
 
-            <form id="taskForm" class="task-form">
+            <div
+                id="createUserSection"
+                class="hidden"
+            >
 
-                <div class="form-group">
-                    <label for="taskName">Task Name *</label>
-                    <input id="taskName" type="text" required>
-                </div>
+                <h2>Create New User</h2>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="taskAssignee">Assignee</label>
-                        <input id="taskAssignee" type="text">
-                    </div>
+                <label for="newUserName">
+                    User Name
+                </label>
 
-                    <div class="form-group">
-                        <label for="taskPriority">Priority</label>
-                        <select id="taskPriority">
-                            <option value="low">Low</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                </div>
+                <input
+                    type="text"
+                    id="newUserName"
+                    placeholder="Enter your name"
+                >
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="taskStartDate">Start Date *</label>
-                        <input id="taskStartDate" type="date" required>
-                    </div>
+                <label for="newUserPin">
+                    Create 4-Digit PIN
+                </label>
 
-                    <div class="form-group">
-                        <label for="taskEndDate">End Date *</label>
-                        <input id="taskEndDate" type="date" required>
-                    </div>
-                </div>
+                <input
+                    type="password"
+                    id="newUserPin"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    placeholder="Enter 4 digits"
+                >
 
-                <div class="form-group">
-                    <label for="taskProgress">
-                        Progress:
-                        <span id="progressValue">0</span>%
-                    </label>
+                <label for="confirmUserPin">
+                    Confirm PIN
+                </label>
 
-                    <input
-                        id="taskProgress"
-                        type="range"
-                        min="0"
-                        max="100"
-                        value="0"
-                    >
-                </div>
+                <input
+                    type="password"
+                    id="confirmUserPin"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    placeholder="Re-enter 4 digits"
+                >
 
-                <div class="form-group">
-                    <div class="subtask-heading">
-                        <label>Subtasks</label>
+                <button
+                    type="button"
+                    id="createUserBtn"
+                    class="btn btn-primary btn-full"
+                >
+                    Create User
+                </button>
 
-                        <button
-                            type="button"
-                            id="addSubtaskBtn"
-                            class="btn btn-small"
-                        >
-                            + Add Subtask
-                        </button>
-                    </div>
+                <button
+                    type="button"
+                    id="backToLoginBtn"
+                    class="link-button"
+                >
+                    Back to User Login
+                </button>
 
-                    <div
-                        id="subtasksContainer"
-                        class="subtasks-container"
-                    ></div>
+            </div>
 
-                    <div
-                        id="subtaskProgressInfo"
-                        class="subtask-progress-info"
-                    >
-                        No subtasks added
-                    </div>
-                </div>
+        </div>
 
-                <div class="form-group">
-                    <label for="taskDescription">Description</label>
-                    <textarea id="taskDescription" rows="4"></textarea>
-                </div>
+    </section>
 
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">
-                        Save Task
-                    </button>
+
+    <!-- Main application -->
+    <div
+        id="appScreen"
+        class="app-screen hidden"
+    >
+
+        <!-- Header -->
+        <header class="header">
+
+            <div class="header-brand">
+                <h1>📋 Office Task Manager</h1>
+                <p>Version 5 - Shared Team Workspace</p>
+            </div>
+
+            <div class="header-actions">
+
+                <span
+                    id="currentUserDisplay"
+                    class="current-user-display"
+                ></span>
+
+                <button
+                    type="button"
+                    id="addTaskBtn"
+                    class="btn btn-primary"
+                >
+                    + Add Task
+                </button>
+
+                <button
+                    type="button"
+                    id="backupBtn"
+                    class="btn btn-success"
+                >
+                    Export Backup
+                </button>
+
+                <button
+                    type="button"
+                    id="refreshBtn"
+                    class="btn btn-info"
+                >
+                    Refresh
+                </button>
+
+                <button
+                    type="button"
+                    id="logoutBtn"
+                    class="btn btn-secondary"
+                >
+                    Logout
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <!-- Status bar -->
+        <div class="status-bar">
+
+            <span id="statusText">
+                Loading data...
+            </span>
+
+            <span id="lastSync">
+                Not synchronized
+            </span>
+
+        </div>
+
+
+        <!-- Task modal -->
+        <div
+            id="taskModal"
+            class="modal hidden"
+        >
+
+            <div
+                class="modal-overlay"
+                data-close-task-modal
+            ></div>
+
+            <div class="modal-content task-modal-content">
+
+                <div class="modal-header">
+
+                    <h2 id="modalTitle">
+                        Add New Task
+                    </h2>
 
                     <button
                         type="button"
-                        class="btn btn-secondary"
-                        onclick="closeModal()"
+                        class="modal-close"
+                        data-close-task-modal
                     >
-                        Cancel
+                        ×
                     </button>
+
                 </div>
 
-            </form>
-        </div>
-    </div>
-
-    <div id="importModal" class="modal hidden">
-        <div class="modal-overlay" onclick="closeImportModal()"></div>
-
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Import Tasks</h2>
-                <button class="modal-close" onclick="closeImportModal()">×</button>
-            </div>
-
-            <div class="import-content">
-                <p id="importMessage"></p>
-                <div id="importPreview" class="import-preview"></div>
-
-                <div class="import-options">
-                    <label>
-                        <input type="radio" name="importMode" value="replace" checked>
-                        Replace existing tasks
-                    </label>
-
-                    <label>
-                        <input type="radio" name="importMode" value="merge">
-                        Add to existing tasks
-                    </label>
-                </div>
-
-                <div class="form-actions">
-                    <button id="confirmImportBtn" class="btn btn-primary">
-                        Import Tasks
-                    </button>
-
-                    <button class="btn btn-secondary" onclick="closeImportModal()">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <main class="main-content">
-
-        <section id="ganttView" class="view active">
-            <div class="gantt-controls">
-                <div class="year-selector">
-                    <button id="prevYearBtn" class="btn btn-small">
-                        ◀ Previous Year
-                    </button>
+                <form id="taskForm">
 
                     <input
-                        id="yearInput"
-                        class="year-input"
-                        type="number"
-                        min="2020"
-                        max="2100"
+                        type="hidden"
+                        id="editingTaskId"
                     >
 
-                    <button id="nextYearBtn" class="btn btn-small">
-                        Next Year ▶
-                    </button>
+                    <div class="form-group">
 
-                    <button id="todayBtn" class="btn btn-small">
-                        Today
-                    </button>
-                </div>
+                        <label for="taskName">
+                            Task Name *
+                        </label>
 
-                <div class="zoom-controls">
-                    <button id="zoomInBtn" class="btn btn-small">🔍+</button>
-                    <button id="zoomOutBtn" class="btn btn-small">🔍−</button>
-                </div>
+                        <input
+                            type="text"
+                            id="taskName"
+                            required
+                            placeholder="Enter task name"
+                        >
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <div class="form-group">
+
+                            <label for="taskAssignee">
+                                Assignee
+                            </label>
+
+                            <input
+                                type="text"
+                                id="taskAssignee"
+                                placeholder="Enter assignee"
+                            >
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label for="taskPriority">
+                                Priority
+                            </label>
+
+                            <select id="taskPriority">
+
+                                <option value="low">
+                                    Low
+                                </option>
+
+                                <option value="medium" selected>
+                                    Medium
+                                </option>
+
+                                <option value="high">
+                                    High
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-row">
+
+                        <div class="form-group">
+
+                            <label for="taskStartDate">
+                                Start Date *
+                            </label>
+
+                            <input
+                                type="date"
+                                id="taskStartDate"
+                                required
+                            >
+
+                        </div>
+
+                        <div class="form-group">
+
+                            <label for="taskEndDate">
+                                End Date *
+                            </label>
+
+                            <input
+                                type="date"
+                                id="taskEndDate"
+                                required
+                            >
+
+                        </div>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label for="taskProgress">
+                            Progress:
+                            <span id="progressValue">0</span>%
+                        </label>
+
+                        <input
+                            type="range"
+                            id="taskProgress"
+                            min="0"
+                            max="100"
+                            value="0"
+                        >
+
+                        <small>
+                            Progress is calculated automatically when subtasks exist.
+                        </small>
+
+                    </div>
+
+
+                    <!-- Subtasks -->
+                    <div class="form-group">
+
+                        <div class="section-heading">
+
+                            <label>
+                                Subtasks
+                            </label>
+
+                            <button
+                                type="button"
+                                id="addSubtaskBtn"
+                                class="btn btn-small"
+                            >
+                                + Add Subtask
+                            </button>
+
+                        </div>
+
+                        <div
+                            id="subtasksContainer"
+                            class="subtasks-container"
+                        ></div>
+
+                        <div
+                            id="subtaskProgressInfo"
+                            class="subtask-progress-info"
+                        >
+                            No subtasks added
+                        </div>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="taskDescription">
+                            Description
+                        </label>
+
+                        <textarea
+                            id="taskDescription"
+                            rows="4"
+                            placeholder="Enter task description"
+                        ></textarea>
+
+                    </div>
+
+
+                    <!-- Comments -->
+                    <div class="comments-section">
+
+                        <div class="section-heading">
+
+                            <h3>
+                                Comments and Replies
+                            </h3>
+
+                            <span
+                                id="commentsCount"
+                                class="comments-count"
+                            >
+                                0
+                            </span>
+
+                        </div>
+
+                        <div
+                            id="commentsContainer"
+                            class="comments-container"
+                        >
+                            <p class="no-comments">
+                                Save the task first to add comments.
+                            </p>
+                        </div>
+
+                        <div
+                            id="newCommentSection"
+                            class="new-comment-section"
+                        >
+
+                            <label for="newComment">
+                                Add Comment
+                            </label>
+
+                            <textarea
+                                id="newComment"
+                                rows="3"
+                                placeholder="Write a comment..."
+                            ></textarea>
+
+                            <button
+                                type="button"
+                                id="addCommentBtn"
+                                class="btn btn-info"
+                            >
+                                Add Comment
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="form-actions">
+
+                        <button
+                            type="submit"
+                            class="btn btn-primary"
+                        >
+                            Save Task
+                        </button>
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            data-close-task-modal
+                        >
+                            Cancel
+                        </button>
+
+                    </div>
+
+                </form>
+
             </div>
 
-            <div id="ganttChart" class="gantt-container"></div>
-        </section>
+        </div>
 
-        <section id="tableView" class="view">
-            <div class="table-wrapper">
-                <table class="tasks-table">
-                    <thead>
-                        <tr>
-                            <th>Task</th>
-                            <th>Assignee</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Progress</th>
-                            <th>Priority</th>
-                            <th>Subtasks</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
 
-                    <tbody id="tasksTableBody"></tbody>
-                </table>
-            </div>
-        </section>
+        <!-- Gantt view -->
+        <main class="main-content">
 
-    </main>
-</div>
+            <section id="ganttView" class="view active">
 
-<script src="js/excel-handler.js"></script>
-<script src="js/storage.js"></script>
-<script src="js/gantt.js"></script>
-<script src="js/app.js"></script>
+                <div class="gantt-controls">
+
+                    <div class="year-selector">
+
+                        <button
+                            type="button"
+                            id="prevYearBtn"
+                            class="btn btn-small"
+                        >
+                            ◀ Previous Year
+                        </button>
+
+                        <input
+                            type="number"
+                            id="yearInput"
+                            min="2020"
+                            max="2100"
+                            class="year-input"
+                        >
+
+                        <button
+                            type="button"
+                            id="nextYearBtn"
+                            class="btn btn-small"
+                        >
+                            Next Year ▶
+                        </button>
+
+                        <button
+                            type="button"
+                            id="todayBtn"
+                            class="btn btn-small"
+                        >
+                            Today
+                        </button>
+
+                    </div>
+
+                    <div class="zoom-controls">
+
+                        <button
+                            type="button"
+                            id="zoomInBtn"
+                            class="btn btn-small"
+                        >
+                            Zoom In
+                        </button>
+
+                        <button
+                            type="button"
+                            id="zoomOutBtn"
+                            class="btn btn-small"
+                        >
+                            Zoom Out
+                        </button>
+
+                    </div>
+
+                </div>
+
+                <div
+                    id="ganttChart"
+                    class="gantt-container"
+                ></div>
+
+            </section>
+
+
+            <!-- Table view -->
+            <section
+                id="tableView"
+                class="view"
+            >
+
+                <div class="table-header">
+
+                    <h2>Task List</h2>
+
+                    <button
+                        type="button"
+                        id="showGanttBtn"
+                        class="btn btn-secondary"
+                    >
+                        Show Gantt
+                    </button>
+
+                </div>
+
+                <div class="table-wrapper">
+
+                    <table class="tasks-table">
+
+                        <thead>
+
+                            <tr>
+                                <th>Task</th>
+                                <th>Assignee</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Progress</th>
+                                <th>Priority</th>
+                                <th>Subtasks</th>
+                                <th>Comments</th>
+                                <th>Actions</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody id="tasksTableBody"></tbody>
+
+                    </table>
+
+                </div>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <!-- Notification container -->
+    <div
+        id="notificationContainer"
+        class="notification-container"
+    ></div>
+
+
+    <!-- Required script order -->
+    <script src="js/google-api.js"></script>
+    <script src="js/excel-handler.js"></script>
+    <script src="js/gantt.js"></script>
+    <script src="js/app.js"></script>
 
 </body>
 </html>
