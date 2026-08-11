@@ -3,115 +3,113 @@ let currentTaskId = null;
 let allTasks = [];
 let allSubtasks = [];
 let allComments = [];
-let selectedTask = null;
+let ganttChart = null;
 
 document.addEventListener("DOMContentLoaded", initializeApp);
 
+
+/* =========================
+   INITIALIZATION
+========================= */
+
 async function initializeApp() {
     setupEventListeners();
-    setDefaultYear();
 
-    try {
-        await loadUsers();
-    } catch (error) {
-        showLoginMessage(error.message, "error");
+    ganttChart = new GanttChart("ganttChart");
+
+    const yearInput = document.getElementById("yearInput");
+
+    if (yearInput) {
+        yearInput.value = new Date().getFullYear();
     }
+
+    await loadUsers();
 }
+
 
 /* =========================
    EVENT LISTENERS
 ========================= */
 
 function setupEventListeners() {
-    document.getElementById("loginBtn").addEventListener("click", loginUser);
-    document.getElementById("createUserBtn").addEventListener("click", createNewUser);
+    addClick("loginBtn", loginUser);
+    addClick("createUserBtn", createNewUser);
+    addClick("showCreateUserBtn", showCreateUser);
+    addClick("backToLoginBtn", showLogin);
 
-    document
-        .getElementById("showCreateUserBtn")
-        .addEventListener("click", showCreateUser);
+    addClick("addTaskBtn", openNewTask);
+    addClick("refreshBtn", loadSharedData);
+    addClick("backupBtn", exportBackup);
+    addClick("logoutBtn", logoutUser);
 
-    document
-        .getElementById("backToLoginBtn")
-        .addEventListener("click", showLogin);
+    addClick("toggleViewBtn", toggleView);
+    addClick("showGanttBtn", showGantt);
 
-    document
-        .getElementById("addTaskBtn")
-        .addEventListener("click", openNewTask);
+    addClick("addSubtaskBtn", () => {
+        addSubtask();
+    });
 
-    document
-        .getElementById("taskForm")
-        .addEventListener("submit", saveTask);
+    addClick("addCommentBtn", addCommentToTask);
 
-    document
-        .getElementById("addSubtaskBtn")
-        .addEventListener("click", () => addSubtask());
+    addClick("prevYearBtn", () => {
+        if (!ganttChart) return;
+        ganttChart.previousYear();
+        renderGantt();
+    });
 
-    document
-        .getElementById("addCommentBtn")
-        .addEventListener("click", addCommentToTask);
+    addClick("nextYearBtn", () => {
+        if (!ganttChart) return;
+        ganttChart.nextYear();
+        renderGantt();
+    });
 
-    document
-        .getElementById("backupBtn")
-        .addEventListener("click", exportBackup);
+    addClick("todayBtn", () => {
+        if (!ganttChart) return;
+        ganttChart.goToToday();
+        renderGantt();
+    });
 
-    document
-        .getElementById("refreshBtn")
-        .addEventListener("click", loadSharedData);
+    addClick("zoomInBtn", () => {
+        if (!ganttChart) return;
+        ganttChart.zoomIn();
+    });
 
-    document
-        .getElementById("logoutBtn")
-        .addEventListener("click", logoutUser);
+    addClick("zoomOutBtn", () => {
+        if (!ganttChart) return;
+        ganttChart.zoomOut();
+    });
 
-    document
-        .getElementById("toggleViewBtn")
-        .addEventListener("click", toggleView);
+    addClick("confirmImportBtn", () => {});
 
-    document
-        .getElementById("showGanttBtn")
-        .addEventListener("click", showGantt);
+    const taskForm = document.getElementById("taskForm");
 
-    document
-        .getElementById("prevYearBtn")
-        .addEventListener("click", () => {
-            ganttChart.previousYear();
+    if (taskForm) {
+        taskForm.addEventListener("submit", saveTask);
+    }
+
+    const progress = document.getElementById("taskProgress");
+
+    if (progress) {
+        progress.addEventListener("input", event => {
+            setText("progressValue", event.target.value);
+        });
+    }
+
+    const yearInput = document.getElementById("yearInput");
+
+    if (yearInput) {
+        yearInput.addEventListener("change", event => {
+            const year = Number(event.target.value);
+
+            if (!year || year < 2020 || year > 2100) {
+                notify("Enter a valid year between 2020 and 2100", "error");
+                return;
+            }
+
+            ganttChart.setYear(year);
             renderGantt();
         });
-
-    document
-        .getElementById("nextYearBtn")
-        .addEventListener("click", () => {
-            ganttChart.nextYear();
-            renderGantt();
-        });
-
-    document
-        .getElementById("todayBtn")
-        .addEventListener("click", () => {
-            ganttChart.goToToday();
-            renderGantt();
-        });
-
-    document
-        .getElementById("zoomInBtn")
-        .addEventListener("click", () => ganttChart.zoomIn());
-
-    document
-        .getElementById("zoomOutBtn")
-        .addEventListener("click", () => ganttChart.zoomOut());
-
-    document
-        .getElementById("yearInput")
-        .addEventListener("change", event => {
-            ganttChart.setYear(Number(event.target.value));
-            renderGantt();
-        });
-
-    document
-        .getElementById("taskProgress")
-        .addEventListener("input", event => {
-            document.getElementById("progressValue").textContent =
-                event.target.value;
-        });
+    }
 
     document
         .querySelectorAll("[data-close-task-modal]")
@@ -120,36 +118,86 @@ function setupEventListeners() {
         });
 }
 
+function addClick(id, callback) {
+    const element = document.getElementById(id);
+
+    if (element) {
+        element.addEventListener("click", callback);
+    }
+}
+
+
 /* =========================
-   LOGIN AND USERS
+   USER LOGIN
 ========================= */
 
 async function loadUsers() {
-    const result = await getUsers();
-
-    const users = Array.isArray(result)
-        ? result
-        : result.users || [];
-
     const select = document.getElementById("userSelect");
 
+    if (!select) return;
+
     select.innerHTML = `
-        <option value="">Select your name</option>
+        <option value="">Loading users...</option>
     `;
 
-    users.forEach(user => {
-        const option = document.createElement("option");
+    try {
+        const response = await getUsers();
 
-        option.value = user.userId || user["User ID"];
-        option.textContent = user.userName || user["User Name"];
+        const users = Array.isArray(response)
+            ? response
+            : response && Array.isArray(response.users)
+                ? response.users
+                : [];
 
-        select.appendChild(option);
-    });
+        select.innerHTML = `
+            <option value="">Select your name</option>
+        `;
+
+        users.forEach(user => {
+            const userId =
+                user.userId ||
+                user["User ID"] ||
+                user.id;
+
+            const userName =
+                user.userName ||
+                user["User Name"] ||
+                user.name;
+
+            if (!userId || !userName) return;
+
+            const option = document.createElement("option");
+
+            option.value = userId;
+            option.textContent = userName;
+
+            select.appendChild(option);
+        });
+
+        if (!users.length) {
+            select.innerHTML = `
+                <option value="">No users found</option>
+            `;
+        }
+
+    } catch (error) {
+        select.innerHTML = `
+            <option value="">Unable to load users</option>
+        `;
+
+        showLoginMessage(
+            "Unable to load users: " + error.message,
+            "error"
+        );
+    }
 }
 
 async function loginUser() {
-    const userId = document.getElementById("userSelect").value;
-    const pin = document.getElementById("loginPin").value.trim();
+    const userSelect = document.getElementById("userSelect");
+    const pinInput = document.getElementById("loginPin");
+
+    const userId = userSelect ? userSelect.value : "";
+    const pin = pinInput ? pinInput.value.trim() : "";
 
     if (!userId) {
         showLoginMessage("Please select your name", "error");
@@ -157,7 +205,10 @@ async function loginUser() {
     }
 
     if (!/^\d{4}$/.test(pin)) {
-        showLoginMessage("PIN must contain exactly 4 digits", "error");
+        showLoginMessage(
+            "PIN must contain exactly 4 digits",
+            "error"
+        );
         return;
     }
 
@@ -172,11 +223,6 @@ async function loginUser() {
             pin
         };
 
-        sessionStorage.setItem(
-            "office_task_user",
-            JSON.stringify(currentUser)
-        );
-
         showApplication();
         await loadSharedData();
 
@@ -186,20 +232,15 @@ async function loginUser() {
 }
 
 async function createNewUser() {
-    const userName = document
-        .getElementById("newUserName")
-        .value
-        .trim();
+    const nameInput = document.getElementById("newUserName");
+    const pinInput = document.getElementById("newUserPin");
+    const confirmInput = document.getElementById("confirmUserPin");
 
-    const pin = document
-        .getElementById("newUserPin")
-        .value
-        .trim();
-
-    const confirmPin = document
-        .getElementById("confirmUserPin")
-        .value
-        .trim();
+    const userName = nameInput ? nameInput.value.trim() : "";
+    const pin = pinInput ? pinInput.value.trim() : "";
+    const confirmPin = confirmInput
+        ? confirmInput.value.trim()
+        : "";
 
     if (!userName) {
         showLoginMessage("Enter your name", "error");
@@ -207,7 +248,10 @@ async function createNewUser() {
     }
 
     if (!/^\d{4}$/.test(pin)) {
-        showLoginMessage("PIN must contain exactly 4 digits", "error");
+        showLoginMessage(
+            "PIN must contain exactly 4 digits",
+            "error"
+        );
         return;
     }
 
@@ -217,21 +261,30 @@ async function createNewUser() {
     }
 
     try {
+        showLoginMessage("Creating user...", "info");
+
         const result = await createUser(userName, pin);
 
-        currentUser = {
-            userId: result.userId,
-            userName: result.userName,
-            pin
-        };
+        await loadUsers();
 
-        sessionStorage.setItem(
-            "office_task_user",
-            JSON.stringify(currentUser)
+        const userSelect = document.getElementById("userSelect");
+
+        if (userSelect) {
+            userSelect.value =
+                result.userId || result["User ID"] || "";
+        }
+
+        const loginPin = document.getElementById("loginPin");
+
+        if (loginPin) {
+            loginPin.value = pin;
+        }
+
+        showLogin();
+        showLoginMessage(
+            "User created. Click Continue.",
+            "success"
         );
-
-        showApplication();
-        await loadSharedData();
 
     } catch (error) {
         showLoginMessage(error.message, "error");
@@ -239,76 +292,47 @@ async function createNewUser() {
 }
 
 function showCreateUser() {
-    document
-        .getElementById("existingUserSection")
-        .classList.add("hidden");
-
-    document
-        .getElementById("createUserSection")
-        .classList.remove("hidden");
-
+    toggleElement("existingUserSection", false);
+    toggleElement("createUserSection", true);
     clearLoginMessage();
 }
 
 function showLogin() {
-    document
-        .getElementById("createUserSection")
-        .classList.add("hidden");
-
-    document
-        .getElementById("existingUserSection")
-        .classList.remove("hidden");
-
-    clearLoginMessage();
+    toggleElement("existingUserSection", true);
+    toggleElement("createUserSection", false);
 }
 
 function showApplication() {
-    document
-        .getElementById("loginScreen")
-        .classList.add("hidden");
+    toggleElement("loginScreen", false);
+    toggleElement("appScreen", true);
 
-    document
-        .getElementById("appScreen")
-        .classList.remove("hidden");
-
-    document
-        .getElementById("currentUserDisplay")
-        .textContent = `👤 ${currentUser.userName}`;
+    setText(
+        "currentUserDisplay",
+        `👤 ${currentUser.userName}`
+    );
 }
 
 function logoutUser() {
     currentUser = null;
-    sessionStorage.removeItem("office_task_user");
+    allTasks = [];
+    allSubtasks = [];
+    allComments = [];
 
-    document
-        .getElementById("appScreen")
-        .classList.add("hidden");
+    toggleElement("appScreen", false);
+    toggleElement("loginScreen", true);
 
-    document
-        .getElementById("loginScreen")
-        .classList.remove("hidden");
+    const pin = document.getElementById("loginPin");
 
-    document.getElementById("loginPin").value = "";
+    if (pin) {
+        pin.value = "";
+    }
 
     showLogin();
 }
 
-function showLoginMessage(message, type) {
-    const element = document.getElementById("loginMessage");
-
-    element.textContent = message;
-    element.className = `login-message ${type}`;
-}
-
-function clearLoginMessage() {
-    const element = document.getElementById("loginMessage");
-
-    element.textContent = "";
-    element.className = "login-message";
-}
 
 /* =========================
-   SHARED DATA
+   GOOGLE SHEETS DATA
 ========================= */
 
 async function loadSharedData() {
@@ -326,7 +350,7 @@ async function loadSharedData() {
         allSubtasks = result.subtasks || [];
         allComments = result.comments || [];
 
-        normalizeSharedData();
+        normalizeData();
 
         renderGantt();
         renderTaskTable();
@@ -336,85 +360,127 @@ async function loadSharedData() {
         );
 
     } catch (error) {
-        notify(error.message, "error");
         updateStatus("Unable to load shared data");
+        notify(error.message, "error");
     }
 }
 
-function normalizeSharedData() {
+function normalizeData() {
     allTasks = allTasks.map(task => {
-        const taskId = task["Task ID"] || task.taskId;
+        const taskId =
+            task["Task ID"] || task.taskId || task.id;
+
+        const subtasks = allSubtasks
+            .filter(subtask => {
+                const subtaskTaskId =
+                    subtask["Task ID"] ||
+                    subtask.taskId;
+
+                return String(subtaskTaskId) === String(taskId);
+            })
+            .map(subtask => ({
+                id:
+                    subtask["Subtask ID"] ||
+                    subtask.subtaskId ||
+                    subtask.id,
+
+                title:
+                    subtask["Subtask Name"] ||
+                    subtask.title ||
+                    subtask.name ||
+                    "",
+
+                startDate:
+                    subtask["Start Date"] ||
+                    subtask.startDate ||
+                    "",
+
+                endDate:
+                    subtask["End Date"] ||
+                    subtask.endDate ||
+                    "",
+
+                completed:
+                    String(
+                        subtask.Completed ||
+                        subtask.completed ||
+                        ""
+                    ).toLowerCase() === "true"
+            }));
 
         return {
-            id: taskId,
             taskId,
+            id: taskId,
             name: task["Task Name"] || task.name || "",
             assignee: task.Assignee || task.assignee || "",
             startDate: task["Start Date"] || task.startDate || "",
             endDate: task["End Date"] || task.endDate || "",
-            progress: Number(task.Progress || task.progress || 0),
-            priority: task.Priority || task.priority || "medium",
-            description: task.Description || task.description || "",
+            progress: Number(
+                task.Progress || task.progress || 0
+            ),
+            priority:
+                task.Priority ||
+                task.priority ||
+                "medium",
+            description:
+                task.Description ||
+                task.description ||
+                "",
             createdBy: task["Created By"] || "",
             createdAt: task["Created At"] || "",
             updatedBy: task["Updated By"] || "",
             updatedAt: task["Updated At"] || "",
-            subtasks: allSubtasks
-                .filter(subtask =>
-                    String(subtask["Task ID"] || subtask.taskId) ===
-                    String(taskId)
-                )
-                .map(subtask => ({
-                    id: subtask["Subtask ID"] || subtask.subtaskId,
-                    title: subtask["Subtask Name"] || subtask.title || "",
-                    startDate: subtask["Start Date"] || "",
-                    endDate: subtask["End Date"] || "",
-                    completed: String(
-                        subtask.Completed
-                    ).toLowerCase() === "true"
-                }))
+            subtasks
         };
     });
 }
 
+
 /* =========================
-   TASK FORM
+   TASKS
 ========================= */
 
 function openNewTask() {
     currentTaskId = null;
-    selectedTask = null;
 
-    document.getElementById("modalTitle").textContent =
-        "Add New Task";
+    setText("modalTitle", "Add New Task");
 
-    document.getElementById("taskForm").reset();
-    document.getElementById("editingTaskId").value = "";
+    const form = document.getElementById("taskForm");
 
-    document.getElementById("progressValue").textContent = "0";
-    document.getElementById("subtasksContainer").innerHTML = "";
-    document.getElementById("subtaskProgressInfo").textContent =
-        "No subtasks added";
+    if (form) {
+        form.reset();
+    }
 
-    document.getElementById("commentsContainer").innerHTML = `
-        <p class="no-comments">
-            Save the task first to add comments.
-        </p>
-    `;
-
-    document.getElementById("commentsCount").textContent = "0";
-    document.getElementById("newCommentSection").classList.add("hidden");
+    setValue("editingTaskId", "");
+    setValue("taskProgress", "0");
+    setText("progressValue", "0");
 
     const today = new Date();
     const endDate = new Date();
     endDate.setDate(today.getDate() + 30);
 
-    document.getElementById("taskStartDate").value =
-        toDateInput(today);
+    setValue("taskStartDate", toDateInput(today));
+    setValue("taskEndDate", toDateInput(endDate));
 
-    document.getElementById("taskEndDate").value =
-        toDateInput(endDate);
+    const subtasks = document.getElementById("subtasksContainer");
 
+    if (subtasks) {
+        subtasks.innerHTML = "";
+    }
+
+    setText("subtaskProgressInfo", "No subtasks added");
+
+    const comments = document.getElementById("commentsContainer");
+
+    if (comments) {
+        comments.innerHTML = `
+            <p class="no-comments">
+                Save the task first to add comments.
+            </p>
+        `;
+    }
+
+    toggleElement("newCommentSection", false);
     openTaskModal();
 }
 
@@ -429,61 +495,31 @@ function editTask(taskId) {
     }
 
     currentTaskId = task.taskId;
-    selectedTask = task;
 
-    document.getElementById("modalTitle").textContent =
-        "Edit Task";
-
-    document.getElementById("editingTaskId").value =
-        task.taskId;
-
-    document.getElementById("taskName").value =
-        task.name;
-
-    document.getElementById("taskAssignee").value =
-        task.assignee;
-
-    document.getElementById("taskPriority").value =
-        task.priority;
-
-    document.getElementById("taskStartDate").value =
-        task.startDate;
-
-    document.getElementById("taskEndDate").value =
-        task.endDate;
-
-    document.getElementById("taskProgress").value =
-        task.progress;
-
-    document.getElementById("progressValue").textContent =
-        task.progress;
-
-    document.getElementById("taskDescription").value =
-        task.description;
+    setText("modalTitle", "Edit Task");
+    setValue("editingTaskId", task.taskId);
+    setValue("taskName", task.name);
+    setValue("taskAssignee", task.assignee);
+    setValue("taskPriority", task.priority);
+    setValue("taskStartDate", task.startDate);
+    setValue("taskEndDate", task.endDate);
+    setValue("taskProgress", task.progress);
+    setText("progressValue", task.progress);
+    setValue("taskDescription", task.description);
 
     renderSubtasks(task.subtasks || []);
     renderComments(task.taskId);
 
-    document
-        .getElementById("newCommentSection")
-        .classList.remove("hidden");
-
+    toggleElement("newCommentSection", true);
     openTaskModal();
 }
 
 async function saveTask(event) {
     event.preventDefault();
 
-    const name = document
-        .getElementById("taskName")
-        .value
-        .trim();
-
-    const startDate =
-        document.getElementById("taskStartDate").value;
-
-    const endDate =
-        document.getElementById("taskEndDate").value;
+    const name = getValue("taskName").trim();
+    const startDate = getValue("taskStartDate");
+    const endDate = getValue("taskEndDate");
 
     if (!name) {
         notify("Task name is required", "error");
@@ -496,7 +532,10 @@ async function saveTask(event) {
     }
 
     if (endDate < startDate) {
-        notify("End date cannot be before start date", "error");
+        notify(
+            "End date cannot be before start date",
+            "error"
+        );
         return;
     }
 
@@ -504,27 +543,17 @@ async function saveTask(event) {
 
     const progress = subtasks.length
         ? calculateProgress(subtasks)
-        : Number(
-            document.getElementById("taskProgress").value
-        ) || 0;
+        : Number(getValue("taskProgress")) || 0;
 
     const task = {
         taskId: currentTaskId || "",
         name,
-        assignee: document
-            .getElementById("taskAssignee")
-            .value
-            .trim(),
-        priority: document
-            .getElementById("taskPriority")
-            .value,
+        assignee: getValue("taskAssignee").trim(),
+        priority: getValue("taskPriority"),
         startDate,
         endDate,
         progress,
-        description: document
-            .getElementById("taskDescription")
-            .value
-            .trim(),
+        description: getValue("taskDescription").trim(),
         subtasks
     };
 
@@ -545,9 +574,16 @@ async function saveTask(event) {
     }
 }
 
+
+/* =========================
+   SUBTASKS
+========================= */
+
 function renderSubtasks(subtasks) {
     const container =
         document.getElementById("subtasksContainer");
+
+    if (!container) return;
 
     container.innerHTML = "";
 
@@ -562,10 +598,14 @@ function addSubtask(subtask = {}) {
     const container =
         document.getElementById("subtasksContainer");
 
+    if (!container) return;
+
     const row = document.createElement("div");
     row.className = "subtask-row";
+
     row.dataset.id =
-        subtask.id || `subtask_${Date.now()}_${Math.random()}`;
+        subtask.id ||
+        `subtask_${Date.now()}_${Math.random()}`;
 
     row.innerHTML = `
         <input
@@ -601,19 +641,19 @@ function addSubtask(subtask = {}) {
         </button>
     `;
 
-    row
-        .querySelector(".subtask-checkbox")
-        .addEventListener("change", () => {
-            row.classList.toggle(
-                "completed",
-                row.querySelector(".subtask-checkbox").checked
-            );
+    const checkbox =
+        row.querySelector(".subtask-checkbox");
 
-            updateSubtaskProgress();
-        });
+    checkbox.addEventListener("change", () => {
+        row.classList.toggle(
+            "completed",
+            checkbox.checked
+        );
 
-    row
-        .querySelector(".remove-subtask")
+        updateSubtaskProgress();
+    });
+
+    row.querySelector(".remove-subtask")
         .addEventListener("click", () => {
             row.remove();
             updateSubtaskProgress();
@@ -629,7 +669,8 @@ function readSubtasks() {
             title: row.querySelector(".subtask-title").value.trim(),
             startDate: row.querySelector(".subtask-start-date").value,
             endDate: row.querySelector(".subtask-end-date").value,
-            completed: row.querySelector(".subtask-checkbox").checked
+            completed:
+                row.querySelector(".subtask-checkbox").checked
         }))
         .filter(subtask => subtask.title);
 }
@@ -650,36 +691,54 @@ function updateSubtaskProgress() {
     const subtasks = readSubtasks();
     const progress = calculateProgress(subtasks);
 
-    document.getElementById("progressValue").textContent =
-        subtasks.length ? progress : 0;
+    setValue(
+        "taskProgress",
+        subtasks.length ? progress : 0
+    );
 
-    document.getElementById("taskProgress").value =
-        subtasks.length ? progress : 0;
+    setText(
+        "progressValue",
+        subtasks.length ? progress : 0
+    );
 
-    document.getElementById("subtaskProgressInfo").textContent =
+    setText(
+        "subtaskProgressInfo",
         subtasks.length
             ? `${subtasks.filter(item => item.completed).length} of ${subtasks.length} completed`
-            : "No subtasks added";
+            : "No subtasks added"
+    );
 }
+
 
 /* =========================
    COMMENTS
 ========================= */
 
 function getTaskComments(taskId) {
-    return allComments.filter(comment =>
-        String(comment["Task ID"] || comment.taskId) ===
-        String(taskId) &&
-        String(comment.Deleted).toLowerCase() !== "true"
-    );
+    return allComments.filter(comment => {
+        const commentTaskId =
+            comment["Task ID"] ||
+            comment.taskId;
+
+        const deleted = String(
+            comment.Deleted ||
+            comment.deleted ||
+            ""
+        ).toLowerCase();
+
+        return String(commentTaskId) === String(taskId) &&
+            deleted !== "true";
+    });
 }
 
 function renderComments(taskId) {
     const comments = getTaskComments(taskId);
-    const container = document.getElementById("commentsContainer");
+    const container =
+        document.getElementById("commentsContainer");
 
-    document.getElementById("commentsCount").textContent =
-        comments.length;
+    if (!container) return;
+
+    setText("commentsCount", comments.length);
 
     if (!comments.length) {
         container.innerHTML = `
@@ -690,11 +749,16 @@ function renderComments(taskId) {
         return;
     }
 
-    const parentComments = comments.filter(comment =>
-        !(comment["Parent Comment ID"] || comment.parentCommentId)
-    );
-
     container.innerHTML = "";
+
+    const parentComments = comments.filter(comment => {
+        const parentId =
+            comment["Parent Comment ID"] ||
+            comment.parentCommentId ||
+            "";
+
+        return !parentId;
+    });
 
     parentComments.forEach(comment => {
         container.appendChild(
@@ -703,26 +767,34 @@ function renderComments(taskId) {
     });
 }
 
-function createCommentElement(comment, allTaskComments) {
+function createCommentElement(comment, comments) {
     const commentId =
-        comment["Comment ID"] || comment.commentId;
+        comment["Comment ID"] ||
+        comment.commentId;
 
     const userId =
-        comment["User ID"] || comment.userId;
-
-    const text =
-        comment["Comment Text"] || comment.commentText || "";
+        comment["User ID"] ||
+        comment.userId;
 
     const userName =
-        comment["User Name"] || comment.userName || "";
+        comment["User Name"] ||
+        comment.userName ||
+        "";
+
+    const text =
+        comment["Comment Text"] ||
+        comment.commentText ||
+        "";
 
     const createdAt =
-        comment["Created At"] || comment.createdAt || "";
+        comment["Created At"] ||
+        comment.createdAt ||
+        "";
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "comment-item";
+    const element = document.createElement("div");
+    element.className = "comment-item";
 
-    wrapper.innerHTML = `
+    element.innerHTML = `
         <div class="comment-header">
             <strong>${escapeHtml(userName)}</strong>
             <small>${escapeHtml(createdAt)}</small>
@@ -733,20 +805,28 @@ function createCommentElement(comment, allTaskComments) {
         </div>
 
         <div class="comment-actions">
-            <button class="comment-reply-btn">Reply</button>
+            <button class="reply-comment-btn">
+                Reply
+            </button>
+
             ${
-                userId === currentUser.userId
+                String(userId) === String(currentUser.userId)
                     ? `
-                        <button class="comment-edit-btn">Edit</button>
-                        <button class="comment-delete-btn">Delete</button>
+                        <button class="edit-comment-btn">
+                            Edit
+                        </button>
+
+                        <button class="delete-comment-btn">
+                            Delete
+                        </button>
                       `
                     : ""
             }
         </div>
 
-        <div class="reply-form hidden">
+        <div class="reply-box hidden">
             <textarea
-                class="reply-text"
+                class="reply-input"
                 rows="2"
                 placeholder="Write a reply..."
             ></textarea>
@@ -759,49 +839,46 @@ function createCommentElement(comment, allTaskComments) {
         <div class="replies-container"></div>
     `;
 
-    wrapper
-        .querySelector(".comment-reply-btn")
+    element.querySelector(".reply-comment-btn")
         .addEventListener("click", () => {
-            wrapper
-                .querySelector(".reply-form")
+            element.querySelector(".reply-box")
                 .classList.toggle("hidden");
         });
 
-    wrapper
-        .querySelector(".submit-reply-btn")
+    element.querySelector(".submit-reply-btn")
         .addEventListener("click", async () => {
-            const replyText = wrapper
-                .querySelector(".reply-text")
+            const reply = element
+                .querySelector(".reply-input")
                 .value
                 .trim();
 
-            if (!replyText) return;
+            if (!reply) return;
 
             await submitComment({
                 taskId: currentTaskId,
-                commentText: replyText,
+                commentText: reply,
                 parentCommentId: commentId
             });
         });
 
     const editButton =
-        wrapper.querySelector(".comment-edit-btn");
+        element.querySelector(".edit-comment-btn");
 
     if (editButton) {
         editButton.addEventListener("click", async () => {
-            const newText = prompt(
-                "Edit comment:",
+            const updatedText = prompt(
+                "Edit your comment:",
                 text
             );
 
-            if (!newText || newText.trim() === text) {
+            if (!updatedText || !updatedText.trim()) {
                 return;
             }
 
             try {
                 await updateComment(
                     commentId,
-                    newText.trim(),
+                    updatedText.trim(),
                     currentUser.userId,
                     currentUser.pin
                 );
@@ -816,11 +893,11 @@ function createCommentElement(comment, allTaskComments) {
     }
 
     const deleteButton =
-        wrapper.querySelector(".comment-delete-btn");
+        element.querySelector(".delete-comment-btn");
 
     if (deleteButton) {
         deleteButton.addEventListener("click", async () => {
-            if (!confirm("Delete this comment?")) {
+            if (!confirm("Delete your comment?")) {
                 return;
             }
 
@@ -840,35 +917,39 @@ function createCommentElement(comment, allTaskComments) {
         });
     }
 
-    const replies = allTaskComments.filter(reply =>
-        String(
+    const replies = comments.filter(reply => {
+        const parentId =
             reply["Parent Comment ID"] ||
-            reply.parentCommentId
-        ) === String(commentId)
-    );
+            reply.parentCommentId ||
+            "";
+
+        return String(parentId) === String(commentId);
+    });
 
     const repliesContainer =
-        wrapper.querySelector(".replies-container");
+        element.querySelector(".replies-container");
 
     replies.forEach(reply => {
         repliesContainer.appendChild(
-            createCommentElement(reply, allTaskComments)
+            createCommentElement(reply, comments)
         );
     });
 
-    return wrapper;
+    return element;
 }
 
 async function addCommentToTask() {
-    const text = document
-        .getElementById("newComment")
-        .value
-        .trim();
+    const input = document.getElementById("newComment");
 
     if (!currentTaskId) {
-        notify("Save the task before adding comments", "error");
+        notify(
+            "Save the task before adding comments",
+            "error"
+        );
         return;
     }
+
+    const text = input ? input.value.trim() : "";
 
     if (!text) {
         notify("Enter a comment", "error");
@@ -880,6 +961,8 @@ async function addCommentToTask() {
         commentText: text,
         parentCommentId: ""
     });
+
+    input.value = "";
 }
 
 async function submitComment(comment) {
@@ -889,8 +972,6 @@ async function submitComment(comment) {
             currentUser.userId,
             currentUser.pin
         );
-
-        document.getElementById("newComment").value = "";
 
         await loadSharedData();
         renderComments(currentTaskId);
@@ -902,17 +983,22 @@ async function submitComment(comment) {
     }
 }
 
+
 /* =========================
    TABLE AND GANTT
 ========================= */
 
 function renderGantt() {
-    if (!window.ganttChart) {
-        if (typeof GanttChart !== "undefined") {
-            window.ganttChart = new GanttChart("ganttChart");
-        } else {
-            return;
-        }
+    if (!ganttChart) {
+        ganttChart = new GanttChart("ganttChart");
+    }
+
+    if (typeof ganttChart.render !== "function") {
+        notify(
+            "gantt.js does not contain a render() function",
+            "error"
+        );
+        return;
     }
 
     ganttChart.render(allTasks);
@@ -921,6 +1007,8 @@ function renderGantt() {
 function renderTaskTable() {
     const tbody =
         document.getElementById("tasksTableBody");
+
+    if (!tbody) return;
 
     tbody.innerHTML = "";
 
@@ -979,14 +1067,13 @@ function renderTaskTable() {
             </td>
 
             <td>
-                <button class="btn btn-edit edit-task-btn">
+                <button class="btn btn-small btn-edit edit-task-button">
                     Edit
                 </button>
             </td>
         `;
 
-        row
-            .querySelector(".edit-task-btn")
+        row.querySelector(".edit-task-button")
             .addEventListener("click", () => {
                 editTask(task.taskId);
             });
@@ -999,22 +1086,30 @@ function toggleView() {
     const gantt = document.getElementById("ganttView");
     const table = document.getElementById("tableView");
 
-    const showingGantt = gantt.classList.contains("active");
+    if (!gantt || !table) return;
 
-    gantt.classList.toggle("active", !showingGantt);
-    table.classList.toggle("active", showingGantt);
+    const ganttVisible = gantt.classList.contains("active");
 
-    document.getElementById("toggleViewBtn").textContent =
-        showingGantt ? "Show Gantt" : "Show Table";
+    gantt.classList.toggle("active", !ganttVisible);
+    table.classList.toggle("active", ganttVisible);
+
+    const button = document.getElementById("toggleViewBtn");
+
+    if (button) {
+        button.textContent = ganttVisible
+            ? "Show Gantt"
+            : "Show Table";
+    }
 }
 
 function showGantt() {
-    document.getElementById("tableView").classList.remove("active");
-    document.getElementById("ganttView").classList.add("active");
+    toggleElement("tableView", false);
+    toggleElement("ganttView", true);
 }
 
+
 /* =========================
-   BACKUP EXPORT
+   BACKUP
 ========================= */
 
 async function exportBackup() {
@@ -1025,6 +1120,7 @@ async function exportBackup() {
         );
 
         const csv = createBackupCSV(data);
+
         downloadTextFile(
             csv,
             `office-task-manager-backup-${Date.now()}.csv`
@@ -1038,30 +1134,24 @@ async function exportBackup() {
 }
 
 function createBackupCSV(data) {
-    const sections = [];
-
-    sections.push("[USERS]");
-    sections.push(objectsToCSV(data.users || []));
-
-    sections.push("[TASKS]");
-    sections.push(objectsToCSV(data.tasks || []));
-
-    sections.push("[SUBTASKS]");
-    sections.push(objectsToCSV(data.subtasks || []));
-
-    sections.push("[COMMENTS]");
-    sections.push(objectsToCSV(data.comments || []));
-
-    sections.push("[AUDITLOG]");
-    sections.push(objectsToCSV(data.auditLog || []));
+    const sections = [
+        "[USERS]",
+        objectsToCSV(data.users || []),
+        "[TASKS]",
+        objectsToCSV(data.tasks || []),
+        "[SUBTASKS]",
+        objectsToCSV(data.subtasks || []),
+        "[COMMENTS]",
+        objectsToCSV(data.comments || []),
+        "[AUDITLOG]",
+        objectsToCSV(data.auditLog || [])
+    ];
 
     return "\uFEFF" + sections.join("\r\n\r\n");
 }
 
 function objectsToCSV(objects) {
-    if (!objects.length) {
-        return "";
-    }
+    if (!objects.length) return "";
 
     const headers = Object.keys(objects[0]);
 
@@ -1071,23 +1161,13 @@ function objectsToCSV(objects) {
 
     objects.forEach(object => {
         lines.push(
-            headers
-                .map(header =>
-                    escapeCSV(object[header] || "")
-                )
-                .join(",")
+            headers.map(header =>
+                escapeCSV(object[header])
+            ).join(",")
         );
     });
 
     return lines.join("\r\n");
-}
-
-function escapeCSV(value) {
-    const text = String(value || "");
-
-    return /[",\r\n]/.test(text)
-        ? `"${text.replace(/"/g, '""')}"`
-        : text;
 }
 
 function downloadTextFile(text, filename) {
@@ -1101,73 +1181,113 @@ function downloadTextFile(text, filename) {
 
     link.href = url;
     link.download = filename;
+
+    document.body.appendChild(link);
     link.click();
+    link.remove();
 
     URL.revokeObjectURL(url);
 }
+
 
 /* =========================
    MODAL AND HELPERS
 ========================= */
 
 function openTaskModal() {
-    document
-        .getElementById("taskModal")
-        .classList.remove("hidden");
+    toggleElement("taskModal", true);
 }
 
 function closeTaskModal() {
-    document
-        .getElementById("taskModal")
-        .classList.add("hidden");
-}
-
-function setDefaultYear() {
-    const input = document.getElementById("yearInput");
-
-    if (input) {
-        input.value = new Date().getFullYear();
-    }
+    toggleElement("taskModal", false);
 }
 
 function updateStatus(message) {
-    document.getElementById("statusText").textContent =
-        message;
+    setText("statusText", message);
+    setText(
+        "lastSync",
+        `Last sync: ${new Date().toLocaleTimeString()}`
+    );
+}
 
-    document.getElementById("lastSync").textContent =
-        `Last sync: ${new Date().toLocaleTimeString()}`;
+function showLoginMessage(message, type) {
+    const element = document.getElementById("loginMessage");
+
+    if (!element) return;
+
+    element.textContent = message;
+    element.className = `login-message ${type || ""}`;
+}
+
+function clearLoginMessage() {
+    showLoginMessage("", "");
 }
 
 function notify(message, type = "info") {
     const container =
         document.getElementById("notificationContainer");
 
-    const notification = document.createElement("div");
+    if (!container) {
+        alert(message);
+        return;
+    }
 
-    notification.className =
+    const element = document.createElement("div");
+
+    element.className =
         `notification notification-${type}`;
 
-    notification.textContent = message;
+    element.textContent = message;
 
-    container.appendChild(notification);
+    container.appendChild(element);
 
     setTimeout(() => {
-        notification.classList.add("show");
+        element.classList.add("show");
     }, 10);
 
     setTimeout(() => {
-        notification.classList.remove("show");
+        element.classList.remove("show");
 
         setTimeout(() => {
-            notification.remove();
+            element.remove();
         }, 300);
     }, 3000);
+}
+
+function toggleElement(id, show) {
+    const element = document.getElementById(id);
+
+    if (!element) return;
+
+    element.classList.toggle("hidden", !show);
+}
+
+function setText(id, value) {
+    const element = document.getElementById(id);
+
+    if (element) {
+        element.textContent = value;
+    }
+}
+
+function setValue(id, value) {
+    const element = document.getElementById(id);
+
+    if (element) {
+        element.value = value;
+    }
+}
+
+function getValue(id) {
+    const element = document.getElementById(id);
+
+    return element ? element.value : "";
 }
 
 function formatDate(value) {
     if (!value) return "-";
 
-    const parts = value.split("-");
+    const parts = String(value).split("-");
 
     return parts.length === 3
         ? `${parts[2]}/${parts[1]}/${parts[0]}`
@@ -1176,8 +1296,13 @@ function formatDate(value) {
 
 function toDateInput(date) {
     const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(
+        date.getMonth() + 1
+    ).padStart(2, "0");
+
+    const day = String(
+        date.getDate()
+    ).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
 }
@@ -1185,7 +1310,8 @@ function toDateInput(date) {
 function capitalize(value) {
     if (!value) return "";
 
-    return value.charAt(0).toUpperCase() + value.slice(1);
+    return value.charAt(0).toUpperCase() +
+        value.slice(1);
 }
 
 function escapeHtml(value) {
@@ -1195,4 +1321,12 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+function escapeCSV(value) {
+    const text = String(value || "");
+
+    return /[",\r\n]/.test(text)
+        ? `"${text.replace(/"/g, '""')}"`
+        : text;
 }

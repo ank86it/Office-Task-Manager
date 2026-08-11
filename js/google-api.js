@@ -9,10 +9,16 @@ async function callGoogleApi(action, data = {}) {
             "Content-Type": "text/plain;charset=utf-8"
         },
         body: JSON.stringify({
-            action,
+            action: action,
             ...data
         })
     });
+
+    if (!response.ok) {
+        throw new Error(
+            `Server error: ${response.status}`
+        );
+    }
 
     const result = await response.json();
 
@@ -26,65 +32,78 @@ async function callGoogleApi(action, data = {}) {
 }
 
 
-async function getUsers() {
-    return await callGoogleApi("getUsers");
-}
+/* =========================
+   USERS AND LOGIN
+========================= */
 
+async function getUsers() {
+    const result = await callGoogleApi("getUsers");
+
+    if (Array.isArray(result)) {
+        return result;
+    }
+
+    if (result && Array.isArray(result.users)) {
+        return result.users;
+    }
+
+    return [];
+}
 
 async function createUser(userName, pin) {
     return await callGoogleApi("createUser", {
-        userName,
-        pin
+        userName: userName,
+        pin: pin
     });
 }
-
 
 async function login(userId, pin) {
     return await callGoogleApi("login", {
-        userId,
-        pin
+        userId: userId,
+        pin: pin
     });
 }
 
+
+/* =========================
+   TASKS AND SUBTASKS
+========================= */
 
 async function getAllData(userId, pin) {
     return await callGoogleApi("getAllData", {
-        userId,
-        pin
+        userId: userId,
+        pin: pin
     });
 }
 
-
-/*
- * This name is required by Version 5 app.js.
- * It sends a task and its subtasks to Google Sheets.
- */
 async function saveTaskToGoogle(task, userId, pin) {
     return await callGoogleApi("saveTask", {
-        task,
-        userId,
-        pin
+        task: task,
+        userId: userId,
+        pin: pin
     });
 }
-
 
 async function deleteTaskFromGoogle(taskId, userId, pin) {
     return await callGoogleApi("deleteTask", {
-        taskId,
-        userId,
-        pin
+        taskId: taskId,
+        userId: userId,
+        pin: pin
     });
 }
 
+
+/* =========================
+   COMMENTS AND REPLIES
+========================= */
 
 async function addComment(comment, userId, pin) {
     return await callGoogleApi("addComment", {
-        comment,
-        userId,
-        pin
+        comment: comment,
+        userId: userId,
+        pin: pin
     });
 }
-
 
 async function updateComment(
     commentId,
@@ -93,26 +112,29 @@ async function updateComment(
     pin
 ) {
     return await callGoogleApi("updateComment", {
-        commentId,
-        commentText,
-        userId,
-        pin
+        commentId: commentId,
+        commentText: commentText,
+        userId: userId,
+        pin: pin
     });
 }
-
 
 async function deleteComment(commentId, userId, pin) {
     return await callGoogleApi("deleteComment", {
-        commentId,
-        userId,
-        pin
+        commentId: commentId,
+        userId: userId,
+        pin: pin
     });
 }
 
 
+/* =========================
+   BACKUP
+========================= */
+
 async function exportGoogleBackup(userId, pin) {
     return await callGoogleApi("exportBackup", {
-        userId,
-        pin
+        userId: userId,
+        pin: pin
     });
 }
